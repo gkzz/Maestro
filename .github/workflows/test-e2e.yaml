@@ -231,7 +231,9 @@ jobs:
 
     env:
       MAESTRO_APP: ${{ inputs.app }}
+      # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
       MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
+      # Sample debug root: Maestro writes log-centric debug output here via --debug-output.
       MAESTRO_DEBUG_OUTPUT_DIR: build/maestro-debug
       MAESTRO_REPORT_OUTPUT: build/results.xml
 
@@ -321,7 +323,9 @@ jobs:
       ANDROID_OS_IMAGE: system-images;${{ inputs.android_version || 'android-32' }};google_apis;x86_64
       MAESTRO_APP: ${{ inputs.app }}
       MAESTRO_FLOW_PATH: ${{ needs.validate-inputs.outputs.flow_path }}
+      # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
       MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
+      # Sample debug root: Maestro writes log-centric debug output here via --debug-output.
       MAESTRO_DEBUG_OUTPUT_DIR: build/maestro-debug
       MAESTRO_REPORT_OUTPUT: build/results.xml
 
@@ -474,7 +478,9 @@ jobs:
       MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000 # 240s
       MAESTRO_CLI_LOG_PATTERN_CONSOLE: '%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n'
       MAESTRO_APP: ${{ inputs.app }}
+      # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
       MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
+      # Sample debug root: Maestro writes log-centric debug output here via --debug-output.
       MAESTRO_DEBUG_OUTPUT_DIR: build/maestro-debug
       MAESTRO_REPORT_OUTPUT: build/results.xml
 
