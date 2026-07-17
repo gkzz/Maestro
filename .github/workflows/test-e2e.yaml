@@ -4,32 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       android_version:
-        description: 'Android API level to test against'
+        description: "Android API level to test against"
         required: false
         type: choice
-        default: 'android-32'
+        default: "android-32"
         options:
-          - 'android-32'
-          - 'android-33'
-          - 'android-34'
-          - 'android-35'
-          - 'android-36'
+          - "android-32"
+          - "android-33"
+          - "android-34"
+          - "android-35"
+          - "android-36"
       app:
-        description: 'App workspace to test (e.g. demo_app, simple_web_view). Empty = all apps.'
+        description: "App workspace to test (e.g. demo_app, simple_web_view). Empty = all apps."
         type: string
-        default: 'demo_app'
+        default: "demo_app"
       flow:
-        description: 'Optional: flow filename within the chosen app (e.g. setLocation). Empty = all flows. Single-flow mode runs Android only.'
+        description: "Optional: flow filename within the chosen app (e.g. setLocation). Empty = all flows. Single-flow mode runs Android only."
         type: string
-        default: ''
+        default: ""
       platform:
-        description: 'Platform to test against (workflow_dispatch only; pull_request runs all three).'
+        description: "Platform to test against (workflow_dispatch only; pull_request runs all three)."
         type: choice
-        default: 'android'
+        default: "android"
         options:
-          - 'android'
-          - 'ios'
-          - 'web'
+          - "android"
+          - "ios"
+          - "web"
   pull_request:
 
 # Cancel an in-progress run when a new one starts on the same ref + same trigger + same dispatch
@@ -241,7 +241,6 @@ jobs:
       - name: Clone repository (only needed for the e2e directory)
         uses: actions/checkout@v6
 
-
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -279,7 +278,7 @@ jobs:
         with:
           name: maestro-test-artifacts-web
           path: e2e/build/maestro-artifacts
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload Maestro debug artifacts
@@ -288,7 +287,7 @@ jobs:
         with:
           name: maestro-debug-artifacts-web
           path: e2e/build/maestro-debug
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload JUnit XML
@@ -297,7 +296,7 @@ jobs:
         with:
           name: maestro-junit-web
           path: e2e/build/*/results-*.xml
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload ~/.maestro artifacts
@@ -338,7 +337,6 @@ jobs:
 
       - name: Clone repository (only needed for the e2e directory)
         uses: actions/checkout@v6
-
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -388,7 +386,7 @@ jobs:
             --name "MyAVD"
 
           echo "DEBUG INFO"
-          
+
           avdmanager list avd
 
           echo "ANDROID_PREFS_ROOT=$ANDROID_PREFS_ROOT"
@@ -397,9 +395,9 @@ jobs:
           echo "ANDROID_SDK_HOME=$ANDROID_SDK_HOME"
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
           echo "ANDROID_EMULATOR_HOME=$ANDROID_EMULATOR_HOME"
-          
+
           echo "HOME=$HOME"
-          
+
           cat << EOF >> ~/.config/.android/avd/MyAVD.avd/config.ini
           hw.cpu.ncore=4
           hw.gpu.enabled=yes
@@ -437,7 +435,7 @@ jobs:
         with:
           name: maestro-test-artifacts-android
           path: e2e/build/maestro-artifacts
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload Maestro debug artifacts
@@ -446,7 +444,7 @@ jobs:
         with:
           name: maestro-debug-artifacts-android
           path: e2e/build/maestro-debug
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload JUnit XML
@@ -455,7 +453,7 @@ jobs:
         with:
           name: maestro-junit-android
           path: e2e/build/*/results-*.xml
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload ~/.maestro artifacts
@@ -476,7 +474,7 @@ jobs:
 
     env:
       MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000 # 240s
-      MAESTRO_CLI_LOG_PATTERN_CONSOLE: '%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n'
+      MAESTRO_CLI_LOG_PATTERN_CONSOLE: "%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n"
       MAESTRO_APP: ${{ inputs.app }}
       # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
       MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
@@ -487,7 +485,6 @@ jobs:
     steps:
       - name: Clone repository (only needed for the e2e directory)
         uses: actions/checkout@v6
-
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -546,7 +543,7 @@ jobs:
         with:
           name: maestro-test-artifacts-ios
           path: e2e/build/maestro-artifacts
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload Maestro debug artifacts
@@ -555,7 +552,7 @@ jobs:
         with:
           name: maestro-debug-artifacts-ios
           path: e2e/build/maestro-debug
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Upload JUnit XML
@@ -564,7 +561,7 @@ jobs:
         with:
           name: maestro-junit-ios
           path: e2e/build/*/results-*.xml
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
 
       - name: Install xcodegen
@@ -604,7 +601,7 @@ jobs:
 
   test-ios-xctest-runner:
     name: Test on iOS (XCTest Runner only)
-    if: false  # Disabled: This needs be fixed, not working yet.
+    if: false # Disabled: This needs be fixed, not working yet.
     runs-on: macos-latest
     needs: build
     timeout-minutes: 30
