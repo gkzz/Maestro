@@ -213,6 +213,9 @@ jobs:
         with:
           name: maestro-cli-${{ matrix.os }}-jdk${{ matrix.java-version }}-run_id${{ github.run_id }}
           path: maestro-cli/build/distributions/maestro.zip
+          # Build output should exist; warn if it does not.
+          if-no-files-found: warn
+          include-hidden-files: false
           retention-days: 1
 
       # The Gradle daemon keeps open handles on ~/.gradle/caches/*.lock; on Windows that
@@ -278,7 +281,9 @@ jobs:
         with:
           name: maestro-test-artifacts-web
           path: e2e/build/maestro-artifacts
-          if-no-files-found: warn
+          # May be empty on successful runs.
+          if-no-files-found: ignore
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload Maestro debug artifacts
@@ -287,7 +292,9 @@ jobs:
         with:
           name: maestro-debug-artifacts-web
           path: e2e/build/maestro-debug
-          if-no-files-found: warn
+          # May be empty on successful runs.
+          if-no-files-found: ignore
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload JUnit XML
@@ -296,7 +303,9 @@ jobs:
         with:
           name: maestro-junit-web
           path: e2e/build/*/results-*.xml
-          if-no-files-found: warn
+          # Required report output.
+          if-no-files-found: error
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload ~/.maestro artifacts
@@ -305,8 +314,10 @@ jobs:
         with:
           name: maestro-root-dir-web
           path: ~/.maestro
-          retention-days: 7
+          # Useful for investigation, but absence is not fatal.
+          if-no-files-found: warn
           include-hidden-files: true
+          retention-days: 7
 
   test-android:
     name: Test on Android
@@ -435,7 +446,9 @@ jobs:
         with:
           name: maestro-test-artifacts-android
           path: e2e/build/maestro-artifacts
-          if-no-files-found: warn
+          # May be empty on successful runs.
+          if-no-files-found: ignore
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload Maestro debug artifacts
@@ -444,7 +457,9 @@ jobs:
         with:
           name: maestro-debug-artifacts-android
           path: e2e/build/maestro-debug
-          if-no-files-found: warn
+          # May be empty on successful runs.
+          if-no-files-found: ignore
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload JUnit XML
@@ -453,7 +468,9 @@ jobs:
         with:
           name: maestro-junit-android
           path: e2e/build/*/results-*.xml
-          if-no-files-found: warn
+          # Required report output.
+          if-no-files-found: error
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload ~/.maestro artifacts
@@ -462,8 +479,10 @@ jobs:
         with:
           name: maestro-root-dir-android
           path: ~/.maestro
-          retention-days: 7
+          # Useful for investigation, but absence is not fatal.
+          if-no-files-found: warn
           include-hidden-files: true
+          retention-days: 7
 
   test-ios:
     name: Test on iOS
@@ -543,7 +562,9 @@ jobs:
         with:
           name: maestro-test-artifacts-ios
           path: e2e/build/maestro-artifacts
-          if-no-files-found: warn
+          # May be empty on successful runs.
+          if-no-files-found: ignore
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload Maestro debug artifacts
@@ -552,7 +573,9 @@ jobs:
         with:
           name: maestro-debug-artifacts-ios
           path: e2e/build/maestro-debug
-          if-no-files-found: warn
+          # May be empty on successful runs.
+          if-no-files-found: ignore
+          include-hidden-files: false
           retention-days: 7
 
       - name: Upload JUnit XML
@@ -561,7 +584,9 @@ jobs:
         with:
           name: maestro-junit-ios
           path: e2e/build/*/results-*.xml
-          if-no-files-found: warn
+          # Required report output.
+          if-no-files-found: error
+          include-hidden-files: false
           retention-days: 7
 
       - name: Install xcodegen
@@ -588,8 +613,10 @@ jobs:
         with:
           name: maestro-root-dir-ios
           path: ~/.maestro
-          retention-days: 7
+          # Useful for investigation, but absence is not fatal.
+          if-no-files-found: warn
           include-hidden-files: true
+          retention-days: 7
 
       - name: Upload screen recording of Simulator
         uses: actions/upload-artifact@v7
@@ -597,6 +624,9 @@ jobs:
         with:
           name: maestro-screenrecord-ios.mp4
           path: ~/screenrecord.mp4
+          # Useful for investigation, but absence is not fatal.
+          if-no-files-found: warn
+          include-hidden-files: false
           retention-days: 7
 
   test-ios-xctest-runner:
@@ -650,8 +680,10 @@ jobs:
         with:
           name: test-ios-xctest-runner__xctest_runner_logs
           path: ~/Library/Logs/maestro/xctest_runner_logs
-          retention-days: 7
+          # Useful for investigation, but absence is not fatal.
+          if-no-files-found: warn
           include-hidden-files: true
+          retention-days: 7
 
   test-cli:
     name: Verify CLI version on ${{ matrix.os }}
