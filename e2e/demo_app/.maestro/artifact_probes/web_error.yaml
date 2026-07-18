@@ -1,0 +1,8 @@
+url: https://www.saucedemo.com/
+tags:
+  - failing
+  - web
+---
+- launchApp
+- assertVisible:
+    id: maestro-artifact-probe-missing-web

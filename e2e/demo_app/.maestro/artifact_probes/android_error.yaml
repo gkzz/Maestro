@@ -1,0 +1,9 @@
+appId: com.example.example
+tags:
+  - failing
+  - android
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: maestro-artifact-probe-missing-android

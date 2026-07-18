@@ -88,6 +88,15 @@ _common_maestro_args() {
 	fi
 }
 
+_artifact_probe_flow_for_platform() {
+	case "$1" in
+		android) printf '%s\n' "./demo_app/.maestro/artifact_probes/android_error.yaml" ;;
+		ios)     printf '%s\n' "./demo_app/.maestro/artifact_probes/ios_error.yaml" ;;
+		web)     printf '%s\n' "./demo_app/.maestro/artifact_probes/web_error.yaml" ;;
+		*)       return 1 ;;
+	esac
+}
+
 _prepare_output_dirs() {
 	if [ -n "$test_output_root" ]; then
 		mkdir -p "$(_test_output_dir_for "$1" "$2")"
@@ -156,6 +165,26 @@ _run_single_flow() {
 		|| { _h2 "$app_name" "FAIL! Single-flow run failed"; ALL_PASS=false; }
 }
 
+_run_expected_failure() {
+	app_name="$1"
+	flow_path="$2"
+	label="$3"
+
+	_h2 "$app_name" "run artifact probe for $label"
+	_prepare_output_dirs "$app_name" "$label"
+
+	while IFS= read -r line; do
+		_h3 "$app_name" "$label" "$line"
+	done < pipe &
+
+	# The probe is meant to fail so that CI uploads a non-empty
+	# maestro-test-artifacts bundle for the platform under test.
+	if maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "$label") "$flow_path" 1>pipe 2>&1; then
+		_h2 "$app_name" "FAIL! Artifact probe unexpectedly passed"
+		ALL_PASS=false
+	fi
+}
+
 if [ -n "$flow_path" ]; then
 	###
 	### Single-flow mode: run exactly one yaml, no tag filtering.
@@ -179,6 +208,8 @@ elif [ "$platform" = "web" ]; then
 
 	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "web") --headless --include-tags web --exclude-tags "$exclude_tags" "$workspace_dir" 1>pipe 2>&1 \
 		|| { _h2 "$app_name" "FAIL! Expected all pass, but at least some failed instead"; ALL_PASS=false; }
+
+	_run_expected_failure "$app_name" "$(_artifact_probe_flow_for_platform "$platform")" "artifact-probe"
 elif [ -n "$app_filter" ]; then
 	###
 	### Single-app mode: run passing+failing for one workspace.
@@ -204,6 +235,12 @@ elif [ -n "$app_filter" ]; then
 	case "$app_name" in
 		wikipedia|simple_web_view) ;;
 		*) _run_failing "$app_name" "$workspace_dir" ;;
+	esac
+
+	case "$app_name" in
+		demo_app)
+			_run_expected_failure "$app_name" "$(_artifact_probe_flow_for_platform "$platform")" "artifact-probe"
+			;;
 	esac
 else
 	###
@@ -231,6 +268,8 @@ else
 			*) _run_failing "$app_name" "$workspace_dir" ;;
 		esac
 	done
+
+	_run_expected_failure "demo_app" "$(_artifact_probe_flow_for_platform "$platform")" "artifact-probe"
 fi
 
 if [ "$ALL_PASS" = "false" ]; then
