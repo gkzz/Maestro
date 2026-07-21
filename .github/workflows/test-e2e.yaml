@@ -275,6 +275,26 @@ jobs:
         timeout-minutes: 20
         run: ./run_tests web
 
+      - name: Summarize Maestro outputs
+        if: always()
+        working-directory: ${{ github.workspace }}/e2e
+        run: |
+          echo "MAESTRO_TEST_OUTPUT_DIR=${MAESTRO_TEST_OUTPUT_DIR:-<unset>}"
+          echo "MAESTRO_DEBUG_OUTPUT_DIR=${MAESTRO_DEBUG_OUTPUT_DIR:-<unset>}"
+          echo "MAESTRO_REPORT_OUTPUT=${MAESTRO_REPORT_OUTPUT:-<unset>}"
+
+          echo "::group::maestro-artifacts"
+          find build/maestro-artifacts -type f | sort || true
+          echo "::endgroup::"
+
+          echo "::group::maestro-debug"
+          find build/maestro-debug -type f | sort || true
+          echo "::endgroup::"
+
+          echo "::group::junit"
+          find build -path '*/results-*.xml' -type f | sort || true
+          echo "::endgroup::"
+
       - name: Upload Maestro test artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -440,6 +460,26 @@ jobs:
         timeout-minutes: 30
         run: ./run_tests android
 
+      - name: Summarize Maestro outputs
+        if: always()
+        working-directory: ${{ github.workspace }}/e2e
+        run: |
+          echo "MAESTRO_TEST_OUTPUT_DIR=${MAESTRO_TEST_OUTPUT_DIR:-<unset>}"
+          echo "MAESTRO_DEBUG_OUTPUT_DIR=${MAESTRO_DEBUG_OUTPUT_DIR:-<unset>}"
+          echo "MAESTRO_REPORT_OUTPUT=${MAESTRO_REPORT_OUTPUT:-<unset>}"
+
+          echo "::group::maestro-artifacts"
+          find build/maestro-artifacts -type f | sort || true
+          echo "::endgroup::"
+
+          echo "::group::maestro-debug"
+          find build/maestro-debug -type f | sort || true
+          echo "::endgroup::"
+
+          echo "::group::junit"
+          find build -path '*/results-*.xml' -type f | sort || true
+          echo "::endgroup::"
+
       - name: Upload Maestro test artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -555,6 +595,26 @@ jobs:
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 120
         run: ./run_tests ios
+
+      - name: Summarize Maestro outputs
+        if: always()
+        working-directory: ${{ github.workspace }}/e2e
+        run: |
+          echo "MAESTRO_TEST_OUTPUT_DIR=${MAESTRO_TEST_OUTPUT_DIR:-<unset>}"
+          echo "MAESTRO_DEBUG_OUTPUT_DIR=${MAESTRO_DEBUG_OUTPUT_DIR:-<unset>}"
+          echo "MAESTRO_REPORT_OUTPUT=${MAESTRO_REPORT_OUTPUT:-<unset>}"
+
+          echo "::group::maestro-artifacts"
+          find build/maestro-artifacts -type f | sort || true
+          echo "::endgroup::"
+
+          echo "::group::maestro-debug"
+          find build/maestro-debug -type f | sort || true
+          echo "::endgroup::"
+
+          echo "::group::junit"
+          find build -path '*/results-*.xml' -type f | sort || true
+          echo "::endgroup::"
 
       - name: Upload Maestro test artifacts
         if: always()
