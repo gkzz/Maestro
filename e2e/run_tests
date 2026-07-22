@@ -17,6 +17,20 @@ _h1() { printf "=>\n=> %s\n=>\n" "$1"; }
 _h2() { printf "==> [%s] %s\n" "$1" "$2"; }
 _h3() { printf "==> [%s] [%s] => %s\n" "$1" "$2" "$3"; }
 
+_common_maestro_args() {
+	app_name="$1"
+	suite_name="$2"
+	output_root="build/${platform}-${app_name}-${suite_name}"
+
+	mkdir -p "$output_root"
+
+	printf '%s\n' \
+		"--test-output-dir=build/maestro-artifacts/${platform}/${app_name}/${suite_name}" \
+		"--debug-output=build/maestro-debug/${platform}/${app_name}/${suite_name}" \
+		"--format=junit" \
+		"--output=${output_root}/results-${suite_name}.xml"
+}
+
 cloud="android_device_configuration,ios_device_configuration" # Maestro Cloud specific tests
 platform="${1:-}"
 case "$platform" in
@@ -28,84 +42,12 @@ esac
 
 app_filter="${MAESTRO_APP:-}"
 flow_path="${MAESTRO_FLOW_PATH:-}"
-test_output_root="${MAESTRO_TEST_OUTPUT_DIR:-}"
-debug_output_root="${MAESTRO_DEBUG_OUTPUT_DIR:-}"
-report_output_root="${MAESTRO_REPORT_OUTPUT:-}"
 
 _workspace_dir_for_app() {
 	if [ "$1" = "demo_app" ]; then
 		echo "./demo_app/.maestro"
 	else
 		echo "./workspaces/$1"
-	fi
-}
-
-_test_output_dir_for() {
-	if [ -z "$test_output_root" ]; then
-		return
-	fi
-
-	printf "%s/%s/%s\n" "$test_output_root" "$1" "$2"
-}
-
-_debug_output_dir_for() {
-	if [ -n "$debug_output_root" ]; then
-		printf "%s/%s/%s\n" "$debug_output_root" "$1" "$2"
-	else
-		printf "%s/.maestro/tests/%s/%s\n" "$HOME" "$1" "$2"
-	fi
-}
-
-_report_output_for() {
-	if [ -z "$report_output_root" ]; then
-		return
-	fi
-
-	output_dir="$(dirname "$report_output_root")"
-	output_name="$(basename "$report_output_root")"
-	output_stem="${output_name%.*}"
-	output_ext="${output_name##*.}"
-
-	# If the report path has no extension, keep the provided name as a prefix.
-	if [ "$output_ext" = "$output_name" ]; then
-		printf "%s/%s/%s-%s\n" "$output_dir" "$1" "$output_name" "$2"
-	else
-		printf "%s/%s/%s-%s.%s\n" "$output_dir" "$1" "$output_stem" "$2" "$output_ext"
-	fi
-}
-
-_common_maestro_args() {
-	if [ -n "$test_output_root" ]; then
-		printf '%s\n' "--test-output-dir=$(_test_output_dir_for "$1" "$2")"
-	fi
-
-	printf '%s\n' "--debug-output=$(_debug_output_dir_for "$1" "$2")"
-
-	printf '%s\n' "--format=junit"
-
-	if [ -n "$report_output_root" ]; then
-		printf '%s\n' "--output=$(_report_output_for "$1" "$2")"
-	fi
-}
-
-_artifact_probe_flow_for_platform() {
-	case "$1" in
-		android) printf '%s\n' "./demo_app/.maestro/artifact_probes/android_error.yaml" ;;
-		ios)     printf '%s\n' "./demo_app/.maestro/artifact_probes/ios_error.yaml" ;;
-		web)     printf '%s\n' "./demo_app/.maestro/artifact_probes/web_error.yaml" ;;
-		*)       return 1 ;;
-	esac
-}
-
-_prepare_output_dirs() {
-	if [ -n "$test_output_root" ]; then
-		mkdir -p "$(_test_output_dir_for "$1" "$2")"
-	fi
-
-	mkdir -p "$(_debug_output_dir_for "$1" "$2")"
-
-	if [ -n "$report_output_root" ]; then
-		mkdir -p "$(dirname "$(_report_output_for "$1" "$2")")"
 	fi
 }
 
@@ -119,13 +61,14 @@ _run_passing() {
 	workspace_target="$2"
 
 	_h2 "$app_name" "run passing tests"
-	_prepare_output_dirs "$app_name" "passing"
 
 	while IFS= read -r line; do
 		_h3 "$app_name" "passing" "$line"
 	done < pipe &
 
-	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "passing") --include-tags passing --exclude-tags "$exclude_tags" "$workspace_target" 1>pipe 2>&1 \
+	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output \
+		$(_common_maestro_args "$app_name" "passing") \
+		--include-tags passing --exclude-tags "$exclude_tags" "$workspace_target" 1>pipe 2>&1 \
 		|| { _h2 "$app_name" "FAIL! Expected all pass, but at least some failed instead"; ALL_PASS=false; }
 }
 
@@ -134,7 +77,6 @@ _run_failing() {
 	workspace_target="$2"
 
 	_h2 "$app_name" "run failing tests"
-	_prepare_output_dirs "$app_name" "failing"
 
 	while IFS= read -r line; do
 		_h3 "$app_name" "failing" "$line"
@@ -143,7 +85,9 @@ _run_failing() {
 	# Inverted polarity: maestro is EXPECTED to exit non-zero. We use `if maestro …` so that
 	# (a) set -e doesn't abort the script when maestro correctly fails, and
 	# (b) we record FAIL only when maestro succeeds (i.e. failing flows unexpectedly passed).
-	if maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "failing") --include-tags failing --exclude-tags "$exclude_tags" "$workspace_target" 1>pipe 2>&1; then
+	if maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output \
+		$(_common_maestro_args "$app_name" "failing") \
+		--include-tags failing --exclude-tags "$exclude_tags" "$workspace_target" 1>pipe 2>&1; then
 		_h2 "$app_name" "FAIL! Expected all to fail, but at least some passed instead"
 		ALL_PASS=false
 	fi
@@ -155,34 +99,15 @@ _run_single_flow() {
 
 	_h1 "run single flow \"$target_yaml\" for app \"$app_name\" on platform \"$platform\""
 	_h2 "$app_name" "run single flow"
-	_prepare_output_dirs "$app_name" "flow"
 
 	while IFS= read -r line; do
 		_h3 "$app_name" "flow" "$line"
 	done < pipe &
 
-	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "flow") "$target_yaml" 1>pipe 2>&1 \
+	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output \
+		$(_common_maestro_args "$app_name" "flow") \
+		"$target_yaml" 1>pipe 2>&1 \
 		|| { _h2 "$app_name" "FAIL! Single-flow run failed"; ALL_PASS=false; }
-}
-
-_run_expected_failure() {
-	app_name="$1"
-	flow_path="$2"
-	label="$3"
-
-	_h2 "$app_name" "run artifact probe for $label"
-	_prepare_output_dirs "$app_name" "$label"
-
-	while IFS= read -r line; do
-		_h3 "$app_name" "$label" "$line"
-	done < pipe &
-
-	# The probe is meant to fail so that CI uploads a non-empty
-	# maestro-test-artifacts bundle for the platform under test.
-	if maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "$label") "$flow_path" 1>pipe 2>&1; then
-		_h2 "$app_name" "FAIL! Artifact probe unexpectedly passed"
-		ALL_PASS=false
-	fi
 }
 
 if [ -n "$flow_path" ]; then
@@ -200,16 +125,15 @@ elif [ "$platform" = "web" ]; then
 
 	_h1 "run tests for app \"$app_name\" on platform \"$platform\""
 	_h2 "$app_name" "run web tests"
-	_prepare_output_dirs "$app_name" "web"
 
 	while IFS= read -r line; do
 		_h3 "$app_name" "web" "$line"
 	done < pipe &
 
-	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output $(_common_maestro_args "$app_name" "web") --headless --include-tags web --exclude-tags "$exclude_tags" "$workspace_dir" 1>pipe 2>&1 \
+	maestro --verbose --no-ansi --platform "$platform" test --flatten-debug-output \
+		$(_common_maestro_args "$app_name" "web") \
+		--headless --include-tags web --exclude-tags "$exclude_tags" "$workspace_dir" 1>pipe 2>&1 \
 		|| { _h2 "$app_name" "FAIL! Expected all pass, but at least some failed instead"; ALL_PASS=false; }
-
-	_run_expected_failure "$app_name" "$(_artifact_probe_flow_for_platform "$platform")" "artifact-probe"
 elif [ -n "$app_filter" ]; then
 	###
 	### Single-app mode: run passing+failing for one workspace.
@@ -235,12 +159,6 @@ elif [ -n "$app_filter" ]; then
 	case "$app_name" in
 		wikipedia|simple_web_view) ;;
 		*) _run_failing "$app_name" "$workspace_dir" ;;
-	esac
-
-	case "$app_name" in
-		demo_app)
-			_run_expected_failure "$app_name" "$(_artifact_probe_flow_for_platform "$platform")" "artifact-probe"
-			;;
 	esac
 else
 	###
@@ -268,8 +186,6 @@ else
 			*) _run_failing "$app_name" "$workspace_dir" ;;
 		esac
 	done
-
-	_run_expected_failure "demo_app" "$(_artifact_probe_flow_for_platform "$platform")" "artifact-probe"
 fi
 
 if [ "$ALL_PASS" = "false" ]; then

@@ -213,9 +213,6 @@ jobs:
         with:
           name: maestro-cli-${{ matrix.os }}-jdk${{ matrix.java-version }}-run_id${{ github.run_id }}
           path: maestro-cli/build/distributions/maestro.zip
-          # Build output should exist; warn if it does not.
-          if-no-files-found: warn
-          include-hidden-files: false
           retention-days: 1
 
       # The Gradle daemon keeps open handles on ~/.gradle/caches/*.lock; on Windows that
@@ -234,11 +231,6 @@ jobs:
 
     env:
       MAESTRO_APP: ${{ inputs.app }}
-      # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
-      MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
-      # Sample debug root: Maestro writes log-centric debug output here via --debug-output.
-      MAESTRO_DEBUG_OUTPUT_DIR: build/maestro-debug
-      MAESTRO_REPORT_OUTPUT: build/results.xml
 
     steps:
       - name: Clone repository (only needed for the e2e directory)
@@ -276,85 +268,45 @@ jobs:
         run: ./run_tests web
 
       - name: Summarize Maestro outputs
-        if: always()
+        if: success() || failure()
         working-directory: ${{ github.workspace }}/e2e
         run: |
-          echo "MAESTRO_TEST_OUTPUT_DIR=${MAESTRO_TEST_OUTPUT_DIR:-<unset>}"
-          echo "MAESTRO_DEBUG_OUTPUT_DIR=${MAESTRO_DEBUG_OUTPUT_DIR:-<unset>}"
-          echo "MAESTRO_REPORT_OUTPUT=${MAESTRO_REPORT_OUTPUT:-<unset>}"
-
-          echo "::group::maestro-artifacts"
-          find build/maestro-artifacts -type f | sort || true
-          echo "::endgroup::"
-
-          echo "::group::maestro-debug"
-          find build/maestro-debug -type f | sort || true
-          echo "::endgroup::"
-
-          echo "::group::junit"
-          find build -path '*/results-*.xml' -type f | sort || true
-          echo "::endgroup::"
+          echo "MAESTRO_APP=${MAESTRO_APP:-}"
+          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
+          echo
+          echo "Generated files under e2e/build:"
+          if [ -d build ]; then
+            find build -type f | sort
+          else
+            echo "build directory not found"
+          fi
 
       - name: Upload Maestro test artifacts
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v7
-        id: upload-maestro-test-artifacts
         with:
           name: maestro-test-artifacts-web
           path: e2e/build/maestro-artifacts
-          # May be empty on successful runs.
-          if-no-files-found: ignore
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Upload Maestro debug artifacts
-        if: always()
+      - name: Upload Maestro debug output
+        if: success() || failure()
         uses: actions/upload-artifact@v7
-        id: upload-maestro-debug-artifacts
         with:
-          name: maestro-debug-artifacts-web
+          name: maestro-debug-output-web
           path: e2e/build/maestro-debug
-          # May be empty on successful runs.
-          if-no-files-found: ignore
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload JUnit XML
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v7
-        id: upload-maestro-junit
         with:
           name: maestro-junit-web
           path: e2e/build/*/results-*.xml
-          # Required report output.
-          if-no-files-found: error
-          include-hidden-files: false
           retention-days: 7
-
-      - name: Summarize artifact links
-        if: always()
-        env:
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          TEST_ARTIFACT_URL: ${{ steps.upload-maestro-test-artifacts.outputs.artifact-url }}
-          DEBUG_ARTIFACT_URL: ${{ steps.upload-maestro-debug-artifacts.outputs.artifact-url }}
-          JUNIT_ARTIFACT_URL: ${{ steps.upload-maestro-junit.outputs.artifact-url }}
-        run: |
-          {
-            echo "### Maestro artifact links"
-            echo ""
-            echo "| Artifact | Link |"
-            echo "|---|---|"
-            echo "| Workflow run | [$RUN_URL]($RUN_URL) |"
-            if [ -n "$TEST_ARTIFACT_URL" ]; then
-              echo "| maestro-test-artifacts-web | [$TEST_ARTIFACT_URL]($TEST_ARTIFACT_URL) |"
-            fi
-            if [ -n "$DEBUG_ARTIFACT_URL" ]; then
-              echo "| maestro-debug-artifacts-web | [$DEBUG_ARTIFACT_URL]($DEBUG_ARTIFACT_URL) |"
-            fi
-            if [ -n "$JUNIT_ARTIFACT_URL" ]; then
-              echo "| maestro-junit-web | [$JUNIT_ARTIFACT_URL]($JUNIT_ARTIFACT_URL) |"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          if-no-files-found: error
 
       - name: Upload ~/.maestro artifacts
         uses: actions/upload-artifact@v7
@@ -362,10 +314,8 @@ jobs:
         with:
           name: maestro-root-dir-web
           path: ~/.maestro
-          # Useful for investigation, but absence is not fatal.
-          if-no-files-found: warn
-          include-hidden-files: true
           retention-days: 7
+          include-hidden-files: true
 
   test-android:
     name: Test on Android
@@ -381,11 +331,6 @@ jobs:
       ANDROID_OS_IMAGE: system-images;${{ inputs.android_version || 'android-32' }};google_apis;x86_64
       MAESTRO_APP: ${{ inputs.app }}
       MAESTRO_FLOW_PATH: ${{ needs.validate-inputs.outputs.flow_path }}
-      # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
-      MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
-      # Sample debug root: Maestro writes log-centric debug output here via --debug-output.
-      MAESTRO_DEBUG_OUTPUT_DIR: build/maestro-debug
-      MAESTRO_REPORT_OUTPUT: build/results.xml
 
     steps:
       - name: Enable KVM group perms
@@ -489,57 +434,45 @@ jobs:
         run: ./run_tests android
 
       - name: Summarize Maestro outputs
-        if: always()
+        if: success() || failure()
         working-directory: ${{ github.workspace }}/e2e
         run: |
-          echo "MAESTRO_TEST_OUTPUT_DIR=${MAESTRO_TEST_OUTPUT_DIR:-<unset>}"
-          echo "MAESTRO_DEBUG_OUTPUT_DIR=${MAESTRO_DEBUG_OUTPUT_DIR:-<unset>}"
-          echo "MAESTRO_REPORT_OUTPUT=${MAESTRO_REPORT_OUTPUT:-<unset>}"
-
-          echo "::group::maestro-artifacts"
-          find build/maestro-artifacts -type f | sort || true
-          echo "::endgroup::"
-
-          echo "::group::maestro-debug"
-          find build/maestro-debug -type f | sort || true
-          echo "::endgroup::"
-
-          echo "::group::junit"
-          find build -path '*/results-*.xml' -type f | sort || true
-          echo "::endgroup::"
+          echo "MAESTRO_APP=${MAESTRO_APP:-}"
+          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
+          echo
+          echo "Generated files under e2e/build:"
+          if [ -d build ]; then
+            find build -type f | sort
+          else
+            echo "build directory not found"
+          fi
 
       - name: Upload Maestro test artifacts
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: maestro-test-artifacts-android
           path: e2e/build/maestro-artifacts
-          # May be empty on successful runs.
-          if-no-files-found: ignore
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Upload Maestro debug artifacts
-        if: always()
+      - name: Upload Maestro debug output
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-debug-artifacts-android
+          name: maestro-debug-output-android
           path: e2e/build/maestro-debug
-          # May be empty on successful runs.
-          if-no-files-found: ignore
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload JUnit XML
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: maestro-junit-android
           path: e2e/build/*/results-*.xml
-          # Required report output.
-          if-no-files-found: error
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: error
 
       - name: Upload ~/.maestro artifacts
         uses: actions/upload-artifact@v7
@@ -547,10 +480,8 @@ jobs:
         with:
           name: maestro-root-dir-android
           path: ~/.maestro
-          # Useful for investigation, but absence is not fatal.
-          if-no-files-found: warn
-          include-hidden-files: true
           retention-days: 7
+          include-hidden-files: true
 
   test-ios:
     name: Test on iOS
@@ -563,11 +494,6 @@ jobs:
       MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000 # 240s
       MAESTRO_CLI_LOG_PATTERN_CONSOLE: "%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n"
       MAESTRO_APP: ${{ inputs.app }}
-      # Sample artifact root: Maestro writes test outputs here via --test-output-dir.
-      MAESTRO_TEST_OUTPUT_DIR: build/maestro-artifacts
-      # Sample debug root: Maestro writes log-centric debug output here via --debug-output.
-      MAESTRO_DEBUG_OUTPUT_DIR: build/maestro-debug
-      MAESTRO_REPORT_OUTPUT: build/results.xml
 
     steps:
       - name: Clone repository (only needed for the e2e directory)
@@ -625,57 +551,45 @@ jobs:
         run: ./run_tests ios
 
       - name: Summarize Maestro outputs
-        if: always()
+        if: success() || failure()
         working-directory: ${{ github.workspace }}/e2e
         run: |
-          echo "MAESTRO_TEST_OUTPUT_DIR=${MAESTRO_TEST_OUTPUT_DIR:-<unset>}"
-          echo "MAESTRO_DEBUG_OUTPUT_DIR=${MAESTRO_DEBUG_OUTPUT_DIR:-<unset>}"
-          echo "MAESTRO_REPORT_OUTPUT=${MAESTRO_REPORT_OUTPUT:-<unset>}"
-
-          echo "::group::maestro-artifacts"
-          find build/maestro-artifacts -type f | sort || true
-          echo "::endgroup::"
-
-          echo "::group::maestro-debug"
-          find build/maestro-debug -type f | sort || true
-          echo "::endgroup::"
-
-          echo "::group::junit"
-          find build -path '*/results-*.xml' -type f | sort || true
-          echo "::endgroup::"
+          echo "MAESTRO_APP=${MAESTRO_APP:-}"
+          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
+          echo
+          echo "Generated files under e2e/build:"
+          if [ -d build ]; then
+            find build -type f | sort
+          else
+            echo "build directory not found"
+          fi
 
       - name: Upload Maestro test artifacts
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: maestro-test-artifacts-ios
           path: e2e/build/maestro-artifacts
-          # May be empty on successful runs.
-          if-no-files-found: ignore
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: ignore
 
-      - name: Upload Maestro debug artifacts
-        if: always()
+      - name: Upload Maestro debug output
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-debug-artifacts-ios
+          name: maestro-debug-output-ios
           path: e2e/build/maestro-debug
-          # May be empty on successful runs.
-          if-no-files-found: ignore
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload JUnit XML
-        if: always()
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
           name: maestro-junit-ios
           path: e2e/build/*/results-*.xml
-          # Required report output.
-          if-no-files-found: error
-          include-hidden-files: false
           retention-days: 7
+          if-no-files-found: error
 
       - name: Install xcodegen
         # Required to generate the Xcode project for the SwiftUI fixture used
@@ -701,10 +615,8 @@ jobs:
         with:
           name: maestro-root-dir-ios
           path: ~/.maestro
-          # Useful for investigation, but absence is not fatal.
-          if-no-files-found: warn
-          include-hidden-files: true
           retention-days: 7
+          include-hidden-files: true
 
       - name: Upload screen recording of Simulator
         uses: actions/upload-artifact@v7
@@ -712,9 +624,6 @@ jobs:
         with:
           name: maestro-screenrecord-ios.mp4
           path: ~/screenrecord.mp4
-          # Useful for investigation, but absence is not fatal.
-          if-no-files-found: warn
-          include-hidden-files: false
           retention-days: 7
 
   test-ios-xctest-runner:
@@ -768,10 +677,8 @@ jobs:
         with:
           name: test-ios-xctest-runner__xctest_runner_logs
           path: ~/Library/Logs/maestro/xctest_runner_logs
-          # Useful for investigation, but absence is not fatal.
-          if-no-files-found: warn
-          include-hidden-files: true
           retention-days: 7
+          include-hidden-files: true
 
   test-cli:
     name: Verify CLI version on ${{ matrix.os }}
