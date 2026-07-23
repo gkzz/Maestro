@@ -1,0 +1,10 @@
+appId: com.example.example
+tags:
+  - passing
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Form Test"
+- takeScreenshot: blog_artifact_capture
+- startRecording: blog_artifact_capture
+- stopRecording
