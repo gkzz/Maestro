@@ -1,6 +1,35 @@
-name: Disabled Test E2E
+name: Test E2E
 
-on: []
+on:
+  workflow_dispatch:
+    inputs:
+      android_version:
+        description: "Android API level to test against"
+        required: false
+        type: choice
+        default: "android-32"
+        options:
+          - "android-32"
+          - "android-33"
+          - "android-34"
+          - "android-35"
+          - "android-36"
+      app:
+        description: "App workspace to test (e.g. demo_app, simple_web_view). Empty = all apps."
+        type: string
+        default: "demo_app"
+      flow:
+        description: "Optional: flow filename within the chosen app (e.g. setLocation). Empty = all flows. Single-flow mode runs Android only."
+        type: string
+        default: ""
+      platform:
+        description: "Platform to test against (workflow_dispatch only; pull_request runs all three)."
+        type: choice
+        default: "android"
+        options:
+          - "android"
+          - "ios"
+          - "web"
 
 # Cancel an in-progress run when a new one starts on the same ref + same trigger + same dispatch
 # inputs. PR pushes cancel earlier PR runs on the same branch; manual dispatches with different
