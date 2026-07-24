@@ -7,4 +7,3 @@ tags:
 - assertVisible: "Form Test"
 - takeScreenshot: blog_artifact_capture
 - startRecording: blog_artifact_capture
-- stopRecording
