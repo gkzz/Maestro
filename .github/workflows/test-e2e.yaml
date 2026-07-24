@@ -171,6 +171,7 @@ jobs:
           name: maestro-debug-output-android
           path: e2e/build/maestro-debug
           retention-days: 7
+          include-hidden-files: true
           if-no-files-found: warn
 
       - name: Upload JUnit XML
@@ -288,6 +289,7 @@ jobs:
           name: maestro-debug-output-ios
           path: e2e/build/maestro-debug
           retention-days: 7
+          include-hidden-files: true
           if-no-files-found: warn
 
       - name: Upload JUnit XML
@@ -394,6 +396,7 @@ jobs:
           name: maestro-debug-output-web
           path: e2e/build/maestro-debug
           retention-days: 7
+          include-hidden-files: true
           if-no-files-found: warn
 
       - name: Upload JUnit XML
