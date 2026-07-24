@@ -129,7 +129,13 @@ jobs:
       - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 30
-        run: ./run_tests android
+        run: >
+          maestro --verbose --no-ansi --platform android test
+          --test-output-dir=build/maestro-artifacts/android/demo_app/flow
+          --debug-output=build/maestro-debug/android/demo_app/flow
+          --format=junit
+          --output=build/android-demo_app-flow/results-flow.xml
+          demo_app/.maestro/blog_artifact_capture.yaml
 
       - name: Summarize Maestro outputs
         if: success() || failure()
@@ -236,7 +242,13 @@ jobs:
       - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 120
-        run: ./run_tests ios
+        run: >
+          maestro --verbose --no-ansi --platform ios test
+          --test-output-dir=build/maestro-artifacts/ios/demo_app/flow
+          --debug-output=build/maestro-debug/ios/demo_app/flow
+          --format=junit
+          --output=build/ios-demo_app-flow/results-flow.xml
+          demo_app/.maestro/blog_artifact_capture.yaml
 
       - name: Summarize Maestro outputs
         if: success() || failure()
@@ -331,7 +343,14 @@ jobs:
       - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 30
-        run: ./run_tests web
+        run: >
+          maestro --verbose --no-ansi --platform web test
+          --headless
+          --test-output-dir=build/maestro-artifacts/web/demo_app/flow
+          --debug-output=build/maestro-debug/web/demo_app/flow
+          --format=junit
+          --output=build/web-demo_app-flow/results-flow.xml
+          demo_app/.maestro/blog_artifact_capture_web.yaml
 
       - name: Summarize Maestro outputs
         if: success() || failure()
