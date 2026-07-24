@@ -4,9 +4,36 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-cli:
+    name: Build Maestro CLI
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: gradle
+
+      - name: Build Maestro CLI
+        run: ./gradlew :maestro-cli:distZip
+
+      - name: Upload Maestro CLI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-cli-blog-run_id${{ github.run_id }}
+          path: maestro-cli/build/distributions/maestro.zip
+          retention-days: 1
+
   blog-android:
     name: Run blog artifact sample on Android
     runs-on: ubuntu-latest
+    needs: build-cli
     timeout-minutes: 60
 
     env:
@@ -27,9 +54,6 @@ jobs:
           distribution: zulu
           java-version: 17
 
-      - name: Build Maestro CLI
-        run: ./gradlew :maestro-cli:distZip
-
       - name: Set up Android Command-line Tools
         run: |
           sh .github/scripts/install_android_sdk https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
@@ -49,9 +73,14 @@ jobs:
         with:
           platform: android
 
+      - name: Download Maestro CLI artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: maestro-cli-blog-run_id${{ github.run_id }}
+
       - name: Add Maestro CLI executable to PATH
         run: |
-          unzip maestro-cli/build/distributions/maestro.zip -d maestro_extracted
+          unzip maestro.zip -d maestro_extracted
           echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
 
       - name: Check if Maestro CLI executable starts up
@@ -114,7 +143,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-test-artifacts-blog
+          name: maestro-test-artifacts-android
           path: e2e/build/maestro-artifacts
           retention-days: 7
           if-no-files-found: ignore
@@ -123,7 +152,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-debug-output-blog
+          name: maestro-debug-output-android
           path: e2e/build/maestro-debug
           retention-days: 7
           if-no-files-found: warn
@@ -132,7 +161,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-junit-blog
+          name: maestro-junit-android
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -141,7 +170,223 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-root-dir-blog
+          name: maestro-root-dir-android
+          path: ~/.maestro
+          retention-days: 7
+          include-hidden-files: true
+
+  blog-ios:
+    name: Run blog artifact sample on iOS
+    runs-on: macos-26
+    needs: build-cli
+    timeout-minutes: 120
+
+    env:
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000
+      MAESTRO_CLI_LOG_PATTERN_CONSOLE: "%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n"
+      MAESTRO_APP: demo_app
+      MAESTRO_FLOW_PATH: demo_app/.maestro/blog_artifact_capture.yaml
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Build demo_app
+        uses: ./.github/actions/build-demo-app
+        with:
+          platform: ios
+
+      - name: Download Maestro CLI artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: maestro-cli-blog-run_id${{ github.run_id }}
+
+      - name: Add Maestro CLI executable to PATH
+        run: |
+          unzip maestro.zip -d maestro_extracted
+          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
+
+      - name: Check if Maestro CLI executable starts up
+        run: |
+          maestro --help
+          maestro --version
+
+      - name: Boot Simulator
+        run: ./.github/scripts/boot_simulator.sh
+
+      - name: Install apps
+        working-directory: ${{ github.workspace }}/e2e
+        run: ./install_apps ios
+
+      - name: Start screen recording
+        run: |
+          xcrun simctl io booted recordVideo --codec h264 ~/screenrecord.mp4 &
+          echo $! > ~/screenrecord.pid
+
+      - name: Run blog sample
+        working-directory: ${{ github.workspace }}/e2e
+        timeout-minutes: 120
+        run: ./run_tests ios
+
+      - name: Summarize Maestro outputs
+        if: success() || failure()
+        working-directory: ${{ github.workspace }}/e2e
+        run: |
+          echo "MAESTRO_APP=${MAESTRO_APP:-}"
+          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
+          echo
+          echo "Generated files under e2e/build:"
+          if [ -d build ]; then
+            find build -type f | sort
+          else
+            echo "build directory not found"
+          fi
+
+      - name: Stop screen recording
+        if: success() || failure()
+        run: kill -SIGINT "$(cat ~/screenrecord.pid)"
+
+      - name: Upload Maestro test artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-test-artifacts-ios
+          path: e2e/build/maestro-artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload Maestro debug output
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-debug-output-ios
+          path: e2e/build/maestro-debug
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload JUnit XML
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-junit-ios
+          path: e2e/build/*/results-*.xml
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload ~/.maestro artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-root-dir-ios
+          path: ~/.maestro
+          retention-days: 7
+          include-hidden-files: true
+
+      - name: Upload screen recording of Simulator
+        uses: actions/upload-artifact@v7
+        if: success() || failure()
+        with:
+          name: maestro-screenrecord-ios.mp4
+          path: ~/screenrecord.mp4
+          retention-days: 7
+
+  blog-web:
+    name: Run blog artifact sample on Web
+    runs-on: ubuntu-latest
+    needs: build-cli
+    timeout-minutes: 30
+
+    env:
+      MAESTRO_APP: demo_app
+      MAESTRO_FLOW_PATH: demo_app/.maestro/blog_artifact_capture_web.yaml
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: 142
+
+      - name: Download Maestro CLI artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: maestro-cli-blog-run_id${{ github.run_id }}
+
+      - name: Add Maestro CLI executable to PATH
+        run: |
+          unzip maestro.zip -d maestro_extracted
+          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
+
+      - name: Check if Maestro CLI executable starts up
+        run: |
+          maestro --help
+          maestro --version
+
+      - name: Run blog sample
+        working-directory: ${{ github.workspace }}/e2e
+        timeout-minutes: 30
+        run: ./run_tests web
+
+      - name: Summarize Maestro outputs
+        if: success() || failure()
+        working-directory: ${{ github.workspace }}/e2e
+        run: |
+          echo "MAESTRO_APP=${MAESTRO_APP:-}"
+          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
+          echo
+          echo "Generated files under e2e/build:"
+          if [ -d build ]; then
+            find build -type f | sort
+          else
+            echo "build directory not found"
+          fi
+
+      - name: Upload Maestro test artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-test-artifacts-web
+          path: e2e/build/maestro-artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload Maestro debug output
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-debug-output-web
+          path: e2e/build/maestro-debug
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload JUnit XML
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-junit-web
+          path: e2e/build/*/results-*.xml
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload ~/.maestro artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maestro-root-dir-web
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true

@@ -23,7 +23,7 @@ Top-level Gradle modules. Code lives under each module's `src/main/`.
 
 ## E2E test fixtures (`e2e/`)
 
-Shipped fixtures used by `.github/workflows/test-e2e.yaml`. The blog workflow runs a single Android flow via `e2e/run_tests android` (see `e2e/run_tests` for env-var inputs `MAESTRO_APP`, `MAESTRO_FLOW_PATH`).
+Shipped fixtures used by `.github/workflows/test-e2e.yaml`. The blog workflow runs one sample flow per platform via `e2e/run_tests <android|ios|web>` (see `e2e/run_tests` for env-var inputs `MAESTRO_APP`, `MAESTRO_FLOW_PATH`).
 
 | Path                     | Role                                                                                                                                                                    |
 |--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -43,11 +43,14 @@ Artifacts land at `<artifact_root>/tests/<app>/<suite>/`:
 
 ## `test-e2e.yaml` workflow contract
 
-`.github/workflows/test-e2e.yaml` is the blog sample workflow. It is `workflow_dispatch` only and runs a single Android flow used by the post about artifact capture.
+`.github/workflows/test-e2e.yaml` is the blog sample workflow. It is `workflow_dispatch` only and runs the artifact-capture sample on Android, iOS, and Web.
 
 - **`workflow_dispatch` only** — no PR trigger, no input validation job, no platform/version matrix.
-- **`blog-android` job** boots an emulator on `system-images;android-32;google_apis;x86_64`, installs the demo app, and runs `e2e/run_tests android`.
-- **Artifacts** are split between `e2e/build/maestro-artifacts` and `e2e/build/maestro-debug`.
+- **`build-cli` job** compiles the CLI once and shares it with the platform jobs as an artifact.
+- **`blog-android` job** boots an emulator on `system-images;android-32;google_apis;x86_64`, installs the demo app, and runs `e2e/run_tests android` against `demo_app/.maestro/blog_artifact_capture.yaml`.
+- **`blog-ios` job** boots a simulator, starts a screen recording, and runs `e2e/run_tests ios` against `demo_app/.maestro/blog_artifact_capture.yaml`.
+- **`blog-web` job** installs Chrome and runs `e2e/run_tests web` against `demo_app/.maestro/blog_artifact_capture_web.yaml`.
+- **Artifacts** are split between `e2e/build/maestro-artifacts` and `e2e/build/maestro-debug` for every platform job.
 
 Use `gh workflow run test-e2e.yaml` from the default branch to exercise the blog sample flow.
 

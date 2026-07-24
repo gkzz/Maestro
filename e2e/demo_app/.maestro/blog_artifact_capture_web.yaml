@@ -1,0 +1,8 @@
+url: https://www.saucedemo.com/
+tags:
+  - passing
+  - web
+---
+- launchApp
+- assertVisible: "Username"
+- takeScreenshot: blog_artifact_capture_web
