@@ -1,187 +1,21 @@
-name: Test E2E
+name: Blog Maestro Artifacts
 
 on:
   workflow_dispatch:
-    inputs:
-      android_version:
-        description: "Android API level to test against"
-        required: false
-        type: choice
-        default: "android-32"
-        options:
-          - "android-32"
-          - "android-33"
-          - "android-34"
-          - "android-35"
-          - "android-36"
-      app:
-        description: "App workspace to test (e.g. demo_app, simple_web_view). Empty = all apps."
-        type: string
-        default: "demo_app"
-      flow:
-        description: "Optional: flow filename within the chosen app (e.g. setLocation). Empty = all flows. Single-flow mode runs Android only."
-        type: string
-        default: ""
-      platform:
-        description: "Platform to test against (workflow_dispatch only; pull_request runs all three)."
-        type: choice
-        default: "android"
-        options:
-          - "android"
-          - "ios"
-          - "web"
-
-# Cancel an in-progress run when a new one starts on the same ref + same trigger + same dispatch
-# inputs. PR pushes cancel earlier PR runs on the same branch; manual dispatches with different
-# android_version / platform / app / flow stay independent so we can validate combinations in parallel.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.android_version || '' }}-${{ inputs.platform || '' }}-${{ inputs.app || '' }}-${{ inputs.flow || '' }}
-  cancel-in-progress: true
 
 jobs:
-  validate-inputs:
-    name: Validate workflow inputs
-    if: github.event_name == 'workflow_dispatch'
+  blog-android:
+    name: Run blog artifact sample on Android
     runs-on: ubuntu-latest
-    outputs:
-      flow_path: ${{ steps.resolve.outputs.flow_path }}
-    steps:
-      - uses: actions/checkout@v6
+    timeout-minutes: 60
 
-      - name: Validate android_version
-        run: |
-          version="${{ inputs.android_version }}"
-          suffix="${version#android-}"
-          if ! printf '%s' "$suffix" | grep -qE '^[0-9]+$'; then
-            echo "::error::android_version malformed: '$version'"
-            exit 1
-          fi
-          if [ "$suffix" -le 29 ]; then
-            echo "::error::android_version must be > android-29 (got: $version)"
-            exit 1
-          fi
-
-      - name: Validate app
-        if: inputs.app != ''
-        run: |
-          app="${{ inputs.app }}"
-          if [ "$app" != "demo_app" ] && [ ! -d "e2e/workspaces/$app" ]; then
-            echo "::error::Unknown app: '$app'. Available:"
-            echo "  demo_app"
-            for d in e2e/workspaces/*/; do [ -d "$d" ] && echo "  $(basename "$d")"; done
-            exit 1
-          fi
-
-      - name: Resolve flow
-        id: resolve
-        if: inputs.flow != ''
-        run: |
-          app="${{ inputs.app }}"
-          [ -z "$app" ] && app="demo_app"
-          if [ "$app" = "demo_app" ]; then
-            workspace_dir="e2e/demo_app/.maestro"
-          else
-            workspace_dir="e2e/workspaces/$app"
-          fi
-
-          name="${{ inputs.flow }}"
-          name="${name%.yaml}"
-          matches=$(find "$workspace_dir" -type f -name "${name}.yaml")
-          count=$(printf "%s\n" "$matches" | grep -cv '^$' || true)
-
-          if [ "$count" -eq 0 ]; then
-            echo "::error::No flow '$name' under $workspace_dir. Available:"
-            find "$workspace_dir" -type f -name "*.yaml" | xargs -n1 basename | sed 's/\.yaml$//' | sort -u
-            exit 1
-          fi
-          if [ "$count" -gt 1 ]; then
-            echo "::error::Multiple matches for '$name':"
-            printf "%s\n" "$matches"
-            exit 1
-          fi
-
-          # run_tests runs with working-directory: ${{ github.workspace }}/e2e, so strip the
-          # leading e2e/ to make the path resolve relative to that working directory.
-          relative_path="${matches#e2e/}"
-          echo "Resolved: $matches (relative to e2e/: $relative_path)"
-          echo "flow_path=$relative_path" >> "$GITHUB_OUTPUT"
-          echo "abs_path=$matches" >> "$GITHUB_OUTPUT"
-
-      - name: Validate flow vs platform
-        if: inputs.flow != ''
-        env:
-          PLATFORM: ${{ inputs.platform }}
-          FLOW_PATH: ${{ steps.resolve.outputs.abs_path }}
-          FLOW_REL: ${{ steps.resolve.outputs.flow_path }}
-        run: |
-          # Read platform tags from the flow's YAML frontmatter. We only look between
-          # `tags:` and the first `---` so we don't pick up step-level dashes.
-          flow_tags=$(awk '
-            /^tags:/ {flag=1; next}
-            /^---/   {exit}
-            flag && /^[[:space:]]*-[[:space:]]/ {gsub(/^[[:space:]]*-[[:space:]]*/, ""); print}
-          ' "$FLOW_PATH")
-          platform_tags=$(printf "%s\n" "$flow_tags" | grep -E '^(android|ios|web)$' || true)
-
-          # No platform tags = cross-platform flow, allow.
-          if [ -z "$platform_tags" ]; then
-            echo "Flow $FLOW_REL has no platform tags; allowing on platform '$PLATFORM'."
-            exit 0
-          fi
-
-          # Platform must be one of the declared tags.
-          if ! printf "%s\n" "$platform_tags" | grep -qx "$PLATFORM"; then
-            tags_csv=$(printf "%s\n" "$platform_tags" | paste -sd, -)
-            echo "::error::Flow $FLOW_REL is tagged for [$tags_csv] but you requested platform '$PLATFORM'."
-            exit 1
-          fi
-
-  # Gates the driver rebuilds below. Paths mirror update-drivers.yaml's `android`/`ios` filters.
-  detect-changes:
-    name: Detect driver changes
-    runs-on: ubuntu-latest
-    outputs:
-      android: ${{ steps.dispatch.outputs.android || steps.filter.outputs.android }}
-      ios: ${{ steps.dispatch.outputs.ios || steps.filter.outputs.ios }}
-    steps:
-      # Manual runs can't diff against a base, so rebuild everything to be safe.
-      - name: Rebuild all on manual dispatch
-        id: dispatch
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          echo "android=true" >> "$GITHUB_OUTPUT"
-          echo "ios=true" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v6
-        if: github.event_name != 'workflow_dispatch'
-      - uses: dorny/paths-filter@v4
-        id: filter
-        if: github.event_name != 'workflow_dispatch'
-        with:
-          filters: |
-            android:
-              - 'maestro-android/**'
-              - 'maestro-client/src/main/resources/maestro-app.apk'
-              - 'maestro-client/src/main/resources/maestro-server.apk'
-            ios:
-              - 'maestro-ios-xctest-runner/**'
-              - 'maestro-ios-driver/src/main/resources/**'
-
-  build:
-    name: Build on ${{ matrix.os }}
-    needs: [validate-inputs, detect-changes]
-    if: ${{ always() && (needs.validate-inputs.result == 'success' || needs.validate-inputs.result == 'skipped') }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        java-version: [17]
-
-    defaults:
-      run:
-        shell: bash
+    env:
+      ANDROID_HOME: /home/runner/androidsdk
+      ANDROID_SDK_ROOT: /home/runner/androidsdk
+      ANDROID_AVD_HOME: /home/runner/.config/.android/avd/
+      ANDROID_OS_IMAGE: system-images;android-32;google_apis;x86_64
+      MAESTRO_APP: demo_app
+      MAESTRO_FLOW_PATH: demo_app/.maestro/blog_artifact_capture.yaml
 
     steps:
       - name: Clone repository
@@ -191,165 +25,13 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: zulu
-          java-version: ${{ matrix.java-version }}
-          cache: gradle
+          java-version: 17
 
-      - name: Build Android drivers
-        if: needs.detect-changes.outputs.android != 'false'
-        run: ./gradlew :maestro-android:assemble :maestro-android:assembleAndroidTest
-
-      # Redundant on macOS: :maestro-cli:distZip already runs :maestro-ios-driver:buildIosDriver (the same xcodebuild) via processResources, so the CLI step below rebuilds the runner anyway.
-      # - name: Build iOS drivers
-      #   if: runner.os == 'macOS'
-      #   run: ./maestro-ios-xctest-runner/build-maestro-ios-runner.sh | xcbeautify
-
-      # Skip the (macOS-only) iOS runner rebuild when its source is unchanged — distZip bundles the committed zips instead. Any other state (changed/dispatch/detection failed) rebuilds.
       - name: Build Maestro CLI
-        run: ./gradlew :maestro-cli:distZip ${{ needs.detect-changes.outputs.ios == 'false' && '-x :maestro-ios-driver:buildIosDriver' || '' }}
-
-      - name: Upload Maestro CLI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-cli-${{ matrix.os }}-jdk${{ matrix.java-version }}-run_id${{ github.run_id }}
-          path: maestro-cli/build/distributions/maestro.zip
-          retention-days: 1
-
-      # The Gradle daemon keeps open handles on ~/.gradle/caches/*.lock; on Windows that
-      # makes setup-java's post-step cache tar fail ("Device or resource busy", exit 2), so
-      # the gradle cache never saves. Stop the daemon here (a normal step, so it runs before
-      # the post-step) to release the locks. Windows-only; harmless to skip elsewhere.
-      - name: Stop Gradle daemon so the cache can save (Windows)
-        if: always() && runner.os == 'Windows'
-        run: ./gradlew --stop
-
-  test-web:
-    name: Test on Web
-    runs-on: ubuntu-latest
-    needs: [build, validate-inputs]
-    if: ${{ always() && needs.build.result == 'success' && (needs.validate-inputs.result == 'success' || needs.validate-inputs.result == 'skipped') && (github.event_name == 'pull_request' || inputs.platform == 'web') && inputs.flow == '' }}
-
-    env:
-      MAESTRO_APP: ${{ inputs.app }}
-
-    steps:
-      - name: Clone repository (only needed for the e2e directory)
-        uses: actions/checkout@v6
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
-
-      - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v2
-        with:
-          chrome-version: 142
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: maestro-cli-macos-latest-jdk17-run_id${{ github.run_id }}
-
-      - name: Add Maestro CLI executable to PATH
-        run: |
-          unzip maestro.zip -d maestro_extracted
-          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
-
-      - name: Check if Maestro CLI executable starts up
-        run: |
-          maestro --help
-          maestro --version
-
-      - name: Run tests
-        working-directory: ${{ github.workspace }}/e2e
-        timeout-minutes: 20
-        run: ./run_tests web
-
-      - name: Summarize Maestro outputs
-        if: success() || failure()
-        working-directory: ${{ github.workspace }}/e2e
-        run: |
-          echo "MAESTRO_APP=${MAESTRO_APP:-}"
-          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
-          echo
-          echo "Generated files under e2e/build:"
-          if [ -d build ]; then
-            find build -type f | sort
-          else
-            echo "build directory not found"
-          fi
-
-      - name: Upload Maestro test artifacts
-        if: success() || failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-test-artifacts-web
-          path: e2e/build/maestro-artifacts
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Upload Maestro debug output
-        if: success() || failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-debug-output-web
-          path: e2e/build/maestro-debug
-          retention-days: 7
-          if-no-files-found: warn
-
-      - name: Upload JUnit XML
-        if: success() || failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-junit-web
-          path: e2e/build/*/results-*.xml
-          retention-days: 7
-          if-no-files-found: error
-
-      - name: Upload ~/.maestro artifacts
-        uses: actions/upload-artifact@v7
-        if: success() || failure()
-        with:
-          name: maestro-root-dir-web
-          path: ~/.maestro
-          retention-days: 7
-          include-hidden-files: true
-
-  test-android:
-    name: Test on Android
-    runs-on: ubuntu-latest
-    needs: [build, validate-inputs]
-    if: ${{ always() && needs.build.result == 'success' && (needs.validate-inputs.result == 'success' || needs.validate-inputs.result == 'skipped') && (github.event_name == 'pull_request' || inputs.platform == 'android') }}
-    timeout-minutes: 60
-
-    env:
-      ANDROID_HOME: /home/runner/androidsdk
-      ANDROID_SDK_ROOT: /home/runner/androidsdk
-      ANDROID_AVD_HOME: /home/runner/.config/.android/avd/
-      ANDROID_OS_IMAGE: system-images;${{ inputs.android_version || 'android-32' }};google_apis;x86_64
-      MAESTRO_APP: ${{ inputs.app }}
-      MAESTRO_FLOW_PATH: ${{ needs.validate-inputs.outputs.flow_path }}
-
-    steps:
-      - name: Enable KVM group perms
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Clone repository (only needed for the e2e directory)
-        uses: actions/checkout@v6
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
+        run: ./gradlew :maestro-cli:distZip
 
       - name: Set up Android Command-line Tools
         run: |
-          # v13 - see https://stackoverflow.com/a/78890086/7009800
           sh .github/scripts/install_android_sdk https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
           echo "$ANDROID_HOME/cmdline-tools/latest/bin:$PATH" >> $GITHUB_PATH
 
@@ -362,19 +44,14 @@ jobs:
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           sdkmanager --install "$ANDROID_OS_IMAGE"
 
-      - name: Build demo_app # Or fetch cached version
+      - name: Build demo_app
         uses: ./.github/actions/build-demo-app
         with:
           platform: android
 
-      - name: Download Maestro build from previous job
-        uses: actions/download-artifact@v8
-        with:
-          name: maestro-cli-macos-latest-jdk17-run_id${{ github.run_id }}
-
       - name: Add Maestro CLI executable to PATH
         run: |
-          unzip maestro.zip -d maestro_extracted
+          unzip maestro-cli/build/distributions/maestro.zip -d maestro_extracted
           echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
 
       - name: Check if Maestro CLI executable starts up
@@ -387,19 +64,6 @@ jobs:
           avdmanager -s create avd \
             --package "$ANDROID_OS_IMAGE" \
             --name "MyAVD"
-
-          echo "DEBUG INFO"
-
-          avdmanager list avd
-
-          echo "ANDROID_PREFS_ROOT=$ANDROID_PREFS_ROOT"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_HOME=$ANDROID_SDK_HOME"
-          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
-          echo "ANDROID_EMULATOR_HOME=$ANDROID_EMULATOR_HOME"
-
-          echo "HOME=$HOME"
 
           cat << EOF >> ~/.config/.android/avd/MyAVD.avd/config.ini
           hw.cpu.ncore=4
@@ -427,7 +91,7 @@ jobs:
         working-directory: ${{ github.workspace }}/e2e
         run: ./install_apps android
 
-      - name: Run tests
+      - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 30
         run: ./run_tests android
@@ -450,7 +114,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-test-artifacts-android
+          name: maestro-test-artifacts-blog
           path: e2e/build/maestro-artifacts
           retention-days: 7
           if-no-files-found: ignore
@@ -459,7 +123,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-debug-output-android
+          name: maestro-debug-output-blog
           path: e2e/build/maestro-debug
           retention-days: 7
           if-no-files-found: warn
@@ -468,267 +132,16 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: maestro-junit-android
+          name: maestro-junit-blog
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
 
       - name: Upload ~/.maestro artifacts
-        uses: actions/upload-artifact@v7
         if: success() || failure()
+        uses: actions/upload-artifact@v7
         with:
-          name: maestro-root-dir-android
+          name: maestro-root-dir-blog
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
-
-  test-ios:
-    name: Test on iOS
-    runs-on: macos-26
-    needs: [build, validate-inputs]
-    if: ${{ always() && needs.build.result == 'success' && (needs.validate-inputs.result == 'success' || needs.validate-inputs.result == 'skipped') && (github.event_name == 'pull_request' || inputs.platform == 'ios') && inputs.flow == '' }}
-    timeout-minutes: 120
-
-    env:
-      MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000 # 240s
-      MAESTRO_CLI_LOG_PATTERN_CONSOLE: "%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n"
-      MAESTRO_APP: ${{ inputs.app }}
-
-    steps:
-      - name: Clone repository (only needed for the e2e directory)
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
-
-      - name: Build demo_app # Or fetch cached version
-        uses: ./.github/actions/build-demo-app
-        with:
-          platform: ios
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: maestro-cli-macos-latest-jdk17-run_id${{ github.run_id }}
-
-      - name: Add Maestro CLI executable to PATH
-        run: |
-          unzip maestro.zip -d maestro_extracted
-          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
-
-      - name: Check if Maestro CLI executable starts up
-        run: |
-          maestro --help
-          maestro --version
-
-      - name: Boot Simulator
-        run: |
-          xcrun simctl list runtimes
-          export RUNTIME="iOS26.2"
-          export DEVICE_TYPE="iPhone 17 Pro"
-          ./.github/scripts/boot_simulator.sh
-
-      - name: Download apps
-        working-directory: ${{ github.workspace }}/e2e
-        run: ./download_apps ios
-
-      - name: Install apps
-        working-directory: ${{ github.workspace }}/e2e
-        run: ./install_apps ios
-
-      - name: Start screen recording
-        run: |
-          xcrun simctl io booted recordVideo --codec h264 ~/screenrecord.mp4 &
-          echo $! > ~/screenrecord.pid
-
-      - name: Run tests
-        working-directory: ${{ github.workspace }}/e2e
-        timeout-minutes: 120
-        run: ./run_tests ios
-
-      - name: Summarize Maestro outputs
-        if: success() || failure()
-        working-directory: ${{ github.workspace }}/e2e
-        run: |
-          echo "MAESTRO_APP=${MAESTRO_APP:-}"
-          echo "MAESTRO_FLOW_PATH=${MAESTRO_FLOW_PATH:-}"
-          echo
-          echo "Generated files under e2e/build:"
-          if [ -d build ]; then
-            find build -type f | sort
-          else
-            echo "build directory not found"
-          fi
-
-      - name: Upload Maestro test artifacts
-        if: success() || failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-test-artifacts-ios
-          path: e2e/build/maestro-artifacts
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Upload Maestro debug output
-        if: success() || failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-debug-output-ios
-          path: e2e/build/maestro-debug
-          retention-days: 7
-          if-no-files-found: warn
-
-      - name: Upload JUnit XML
-        if: success() || failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-junit-ios
-          path: e2e/build/*/results-*.xml
-          retention-days: 7
-          if-no-files-found: error
-
-      - name: Install xcodegen
-        # Required to generate the Xcode project for the SwiftUI fixture used
-        # by the preflight regression test below.
-        run: brew install xcodegen
-
-      - name: Verify iOS UI-interruption preflight is suppressed
-        # Regression guard for the XCTest UI-interruption preflight hang.
-        # Builds a minimal SwiftUI app that presents a real UIAlertController,
-        # runs a gesture against it, and asserts Apple's preflight signature
-        # lines never appear in the xctest_runner log. Fails if the swizzle in
-        # maestro-ios-xctest-runner/maestro-driver-iosUITests/Categories/
-        # XCUIApplication+Helper.m regresses.
-        run: ./e2e/alert-repro-swiftui/verify_preflight_suppressed.sh "$SIM_UDID"
-
-      - name: Stop screen recording
-        if: success() || failure()
-        run: kill -SIGINT "$(cat ~/screenrecord.pid)"
-
-      - name: Upload ~/.maestro artifacts
-        uses: actions/upload-artifact@v7
-        if: success() || failure()
-        with:
-          name: maestro-root-dir-ios
-          path: ~/.maestro
-          retention-days: 7
-          include-hidden-files: true
-
-      - name: Upload screen recording of Simulator
-        uses: actions/upload-artifact@v7
-        if: success() || failure()
-        with:
-          name: maestro-screenrecord-ios.mp4
-          path: ~/screenrecord.mp4
-          retention-days: 7
-
-  test-ios-xctest-runner:
-    name: Test on iOS (XCTest Runner only)
-    if: false # Disabled: This needs be fixed, not working yet.
-    runs-on: macos-latest
-    needs: build
-    timeout-minutes: 30
-
-    steps:
-      - name: Clone repository (only needed for the e2e directory)
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: 17
-
-      - name: Download Maestro artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: maestro-cli-macos-latest-jdk17-run_id${{ github.run_id }}
-
-      - name: Download build/Products artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: build__Products-jdk17
-          path: build/Products
-
-      - name: Add Maestro CLI executable to PATH
-        run: |
-          unzip maestro.zip -d maestro_extracted
-          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
-
-      - name: Check if Maestro CLI executable starts up
-        run: |
-          maestro --help
-          maestro --version
-
-      - name: Boot Simulator
-        run: ./.github/scripts/boot_simulator.sh
-
-      - name: Run tests
-        timeout-minutes: 15
-        run: ./maestro-ios-xctest-runner/test-maestro-ios-runner.sh
-
-      - name: Upload xc test runner logs
-        uses: actions/upload-artifact@v7
-        if: success() || failure()
-        with:
-          name: test-ios-xctest-runner__xctest_runner_logs
-          path: ~/Library/Logs/maestro/xctest_runner_logs
-          retention-days: 7
-          include-hidden-files: true
-
-  test-cli:
-    name: Verify CLI version on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    needs: build
-    if: ${{ always() && needs.build.result == 'success' }}
-    timeout-minutes: 10
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        java-version: [17]
-
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - name: Clone repository
-        uses: actions/checkout@v6
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: zulu
-          java-version: ${{ matrix.java-version }}
-
-      - name: Download Maestro CLI artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: maestro-cli-${{ matrix.os }}-jdk${{ matrix.java-version }}-run_id${{ github.run_id }}
-
-      - name: Add Maestro CLI to PATH (Linux / macOS)
-        if: runner.os != 'Windows'
-        run: |
-          unzip maestro.zip -d maestro_extracted
-          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
-
-      - name: Add Maestro CLI to PATH (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Expand-Archive -Path maestro.zip -DestinationPath maestro_extracted
-          "$PWD\maestro_extracted\maestro\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-
-      - name: Test CLI (Linux / macOS)
-        if: runner.os != 'Windows'
-        run: e2e/cli/test-cli.sh
-
-      - name: Test CLI (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: e2e/cli/test-cli.ps1
