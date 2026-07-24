@@ -126,6 +126,10 @@ jobs:
         working-directory: ${{ github.workspace }}/e2e
         run: ./install_apps android
 
+      - name: Prepare JUnit output directory
+        working-directory: ${{ github.workspace }}/e2e
+        run: mkdir -p build/android-demo_app-flow
+
       - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 30
@@ -239,6 +243,10 @@ jobs:
         working-directory: ${{ github.workspace }}/e2e
         run: ./install_apps ios
 
+      - name: Prepare JUnit output directory
+        working-directory: ${{ github.workspace }}/e2e
+        run: mkdir -p build/ios-demo_app-flow
+
       - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 120
@@ -339,6 +347,10 @@ jobs:
         run: |
           maestro --help
           maestro --version
+
+      - name: Prepare JUnit output directory
+        working-directory: ${{ github.workspace }}/e2e
+        run: mkdir -p build/web-demo_app-flow
 
       - name: Run blog sample
         working-directory: ${{ github.workspace }}/e2e
