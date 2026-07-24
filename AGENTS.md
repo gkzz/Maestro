@@ -23,7 +23,7 @@ Top-level Gradle modules. Code lives under each module's `src/main/`.
 
 ## E2E test fixtures (`e2e/`)
 
-Shipped fixtures used by `.github/workflows/test-e2e.yaml`. Run via `e2e/run_tests <android|ios|web>` (see `e2e/run_tests` for env-var inputs `MAESTRO_APP`, `MAESTRO_FLOW_PATH`).
+Shipped fixtures used by `.github/workflows/test-e2e.yaml`. The blog workflow runs a single Android flow via `e2e/run_tests android` (see `e2e/run_tests` for env-var inputs `MAESTRO_APP`, `MAESTRO_FLOW_PATH`).
 
 | Path                     | Role                                                                                                                                                                    |
 |--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -43,13 +43,13 @@ Artifacts land at `<artifact_root>/tests/<app>/<suite>/`:
 
 ## `test-e2e.yaml` workflow contract
 
-`.github/workflows/test-e2e.yaml` is the validation harness for both PR triggers and manual `workflow_dispatch` (e.g. validating a new Android API level or iOS version). Contract:
+`.github/workflows/test-e2e.yaml` is the blog sample workflow. It is `workflow_dispatch` only and runs a single Android flow used by the post about artifact capture.
 
-- **`workflow_dispatch` inputs** — `android_version` (choice enum), `app` (string, default `demo_app`), `flow` (string, optional single-flow). The `validate-inputs` job rejects `android_version <= android-29`, missing `app` workspace, or ambiguous `flow`. (See PR #3226.)
-- **`pull_request` triggers** are byte-identical to the prior behaviour; manual dispatches use the new narrowing knobs.
-- **`test-android` job** boots an emulator on `system-images;${android_version};google_apis;x86_64` and runs `e2e/run_tests android`.
+- **`workflow_dispatch` only** — no PR trigger, no input validation job, no platform/version matrix.
+- **`blog-android` job** boots an emulator on `system-images;android-32;google_apis;x86_64`, installs the demo app, and runs `e2e/run_tests android`.
+- **Artifacts** are split between `e2e/build/maestro-artifacts` and `e2e/build/maestro-debug`.
 
-Skills that bump platform versions (Android API levels, iOS versions) drive this workflow via `gh workflow run test-e2e.yaml --ref <branch> -f android_version=<...>`.
+Use `gh workflow run test-e2e.yaml` from the default branch to exercise the blog sample flow.
 
 ## Testing
 
@@ -86,17 +86,17 @@ Stack: **Maestro CLI itself** (dogfood) + `e2e/run_tests` shell driver + GHA wor
 
 ```bash
 cd e2e && ./run_tests <android|ios|web>     # local
-gh workflow run test-e2e.yaml --ref <branch> -f android_version=android-<N>   # CI
+gh workflow run test-e2e.yaml --ref <branch>   # blog sample workflow
 ```
 
 **Two roles for the same E2E setup.** The same suite serves both purposes — treat them identically:
 
-1. **Regression smoke** — every PR that touches Maestro source runs the suite on the current platform versions, catching behaviour breakage on existing platforms.
-2. **New-OS validation** — when launching a new Android API level or iOS version, the same flows are dispatched against the new system image to confirm Maestro still works. This is what `bump-android-version` (and the planned `bump-ios-version`) drives.
+1. **Blog sample execution** — the workflow exercises a single Android flow and captures output artifacts for the blog post.
+2. **Artifact validation** — the same flow is used to show how `--test-output-dir` and `--debug-output` differ in practice.
 
-A flow breaking for either reason is a real regression — fix in `maestro-android/`, `maestro-client/`, or `e2e/demo_app/`, not in `test-e2e.yaml` (see "What NOT to do").
+A failure here is usually a workflow or fixture regression. Fix it in `.github/workflows/test-e2e.yaml`, `e2e/run_tests`, or `e2e/demo_app/.maestro/`.
 
-**Multiple apps for framework-specific coverage.** `demo_app/` (Flutter) is the default fixture and exercises every Maestro command. When a target is **framework-specific** (SwiftUI, React Native, Jetpack Compose specifics, WebView quirks, etc.), add a separate workspace under `e2e/workspaces/<app>/` with its own `.maestro/` flow YAMLs and a binary under `e2e/apps/`. Existing examples: `simple_web_view` (WebView coverage), `wikipedia` (real-world third-party app). The workflow's `app` input narrows a manual dispatch to one workspace: `... -f app=simple_web_view`.
+**Multiple apps for framework-specific coverage.** `demo_app/` (Flutter) is the default fixture and exercises every Maestro command. When a target is **framework-specific** (SwiftUI, React Native, Jetpack Compose specifics, WebView quirks, etc.), add a separate workspace under `e2e/workspaces/<app>/` with its own `.maestro/` flow YAMLs and a binary under `e2e/apps/`. Existing examples: `simple_web_view` (WebView coverage), `wikipedia` (real-world third-party app).
 
 ### MCP server evals (`maestro-cli/src/test/mcp/`)
 
@@ -122,6 +122,6 @@ LLM-behaviour evaluations and tool-functionality tests for the MCP server inside
 
 ## What NOT to do
 
-- Don't fix driver-behaviour gaps by patching `.github/workflows/test-e2e.yaml` (e.g. extra `adb shell settings put …`, command-line tweaks, AVD pre-config). Workflow band-aids hide the regression from users running Maestro outside our CI. Fix `maestro-android/`, `maestro-client/`, or `e2e/demo_app/` instead so the fix ships with the driver APKs. Workflow edits are valid for shape-changes (matrix, retention, dispatch inputs) and the narrow third-party-FRE exception documented in skill files.
+- Don't fix driver-behaviour gaps by patching `.github/workflows/test-e2e.yaml` (e.g. extra `adb shell settings put …`, command-line tweaks, AVD pre-config). Workflow band-aids hide the regression from users running Maestro outside our CI. Fix `maestro-android/`, `maestro-client/`, or `e2e/demo_app/` instead so the fix ships with the driver APKs. Workflow edits are valid for shape-changes and for the blog artifact sample workflow documented here.
 - Don't edit checked-in driver artifacts (`maestro-app.apk`, `maestro-server.apk`, `maestro-android-source.sha256`, `maestro-driver-ios*.zip`) by hand — they are gradle finalizer outputs.
 - Don't modify existing flows in `failing/` to make them pass — that's the negative-path suite by design.
