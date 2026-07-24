@@ -45,6 +45,12 @@ jobs:
       MAESTRO_FLOW_PATH: demo_app/.maestro/blog_artifact_capture.yaml
 
     steps:
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Clone repository
         uses: actions/checkout@v6
 
@@ -218,6 +224,9 @@ jobs:
           maestro --version
 
       - name: Boot Simulator
+        env:
+          DEVICE_TYPE: iPhone 17 Pro
+          RUNTIME: iOS26.2
         run: ./.github/scripts/boot_simulator.sh
 
       - name: Install apps
