@@ -159,7 +159,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-test-artifacts-android
+          name: maestro-blog-android-test-output
           path: e2e/build/maestro-artifacts
           retention-days: 7
           if-no-files-found: ignore
@@ -168,7 +168,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-debug-output-android
+          name: maestro-blog-android-debug-output
           path: e2e/build/maestro-debug
           retention-days: 7
           include-hidden-files: true
@@ -178,7 +178,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-junit-android
+          name: maestro-blog-android-junit
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -187,7 +187,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-root-dir-android
+          name: maestro-blog-android-root-dir
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
@@ -277,7 +277,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-test-artifacts-ios
+          name: maestro-blog-ios-test-output
           path: e2e/build/maestro-artifacts
           retention-days: 7
           if-no-files-found: ignore
@@ -286,7 +286,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-debug-output-ios
+          name: maestro-blog-ios-debug-output
           path: e2e/build/maestro-debug
           retention-days: 7
           include-hidden-files: true
@@ -296,7 +296,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-junit-ios
+          name: maestro-blog-ios-junit
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -305,7 +305,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-root-dir-ios
+          name: maestro-blog-ios-root-dir
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
@@ -384,7 +384,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-test-artifacts-web
+          name: maestro-blog-web-test-output
           path: e2e/build/maestro-artifacts
           retention-days: 7
           if-no-files-found: ignore
@@ -393,7 +393,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-debug-output-web
+          name: maestro-blog-web-debug-output
           path: e2e/build/maestro-debug
           retention-days: 7
           include-hidden-files: true
@@ -403,7 +403,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-junit-web
+          name: maestro-blog-web-junit
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -412,7 +412,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-root-dir-web
+          name: maestro-blog-web-root-dir
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
@@ -490,7 +490,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-test-artifacts-web-test-only
+          name: maestro-blog-web-test-output-only
           path: e2e/build/maestro-artifacts/web-test-only
           retention-days: 7
           if-no-files-found: ignore
@@ -499,7 +499,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-junit-web-test-only
+          name: maestro-blog-web-test-output-only-junit
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -508,7 +508,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-root-dir-web-test-only
+          name: maestro-blog-web-test-output-only-root-dir
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
@@ -586,7 +586,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-debug-output-web-debug-only
+          name: maestro-blog-web-debug-output-only
           path: e2e/build/maestro-debug/web-debug-only
           retention-days: 7
           include-hidden-files: true
@@ -596,7 +596,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-junit-web-debug-only
+          name: maestro-blog-web-debug-output-only-junit
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -605,7 +605,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-root-dir-web-debug-only
+          name: maestro-blog-web-debug-output-only-root-dir
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
@@ -685,7 +685,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-artifacts-web-flatten
+          name: maestro-blog-web-flatten-test-output
           path: e2e/build/maestro-artifacts/web-flat/demo_app/all
           retention-days: 7
           if-no-files-found: error
@@ -694,7 +694,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-junit-web-flatten
+          name: maestro-blog-web-flatten-junit
           path: e2e/build/*/results-*.xml
           retention-days: 7
           if-no-files-found: error
@@ -703,7 +703,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: maestro-root-dir-web-flatten
+          name: maestro-blog-web-flatten-root-dir
           path: ~/.maestro
           retention-days: 7
           include-hidden-files: true
