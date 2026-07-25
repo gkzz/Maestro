@@ -7,3 +7,4 @@ tags:
 - assertVisible: "Form Test"
 - takeScreenshot: blog_artifact_capture
 - startRecording: blog_artifact_capture
+- assertVisible: "THIS_TEXT_DOES_NOT_EXIST"
