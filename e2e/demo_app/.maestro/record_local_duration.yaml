@@ -4,5 +4,6 @@ name: Record local duration smoke test
 - launchApp:
     clearState: true
 
-- waitForAnimationToEnd:
-    timeout: 180000
+# Keep the flow alive for a little over two minutes so local recording stays
+# long enough to validate the recorder output.
+- evalScript: ${Java.type("java.lang.Thread").sleep(125000); true}
