@@ -1,0 +1,138 @@
+name: Record Local Duration Check
+
+on:
+  push:
+    branches:
+      - playground/maestro-docs-ios-issue-194
+
+jobs:
+  record-local-duration:
+    name: Record local flow
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+
+    env:
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000
+      MAESTRO_CLI_LOG_PATTERN_CONSOLE: '%d{HH:mm:ss.SSS} [%5level] %logger.%method: %msg%n'
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Build Maestro CLI
+        run: ./gradlew :maestro-cli:distZip
+
+      - name: Add Maestro CLI executable to PATH
+        run: |
+          unzip maestro-cli/build/distributions/maestro.zip -d maestro_extracted
+          echo "$PWD/maestro_extracted/maestro/bin" >> $GITHUB_PATH
+
+      - name: Check if Maestro CLI executable starts up
+        run: |
+          maestro --help
+          maestro --version
+
+      - name: Build demo app for iOS
+        uses: ./.github/actions/build-demo-app
+        with:
+          platform: ios
+
+      - name: Boot Simulator
+        run: |
+          xcrun simctl list runtimes
+          export RUNTIME="iOS18.5"
+          export DEVICE_TYPE="iPhone 16"
+          ./.github/scripts/boot_simulator.sh
+
+      - name: Install demo app
+        run: |
+          xcrun simctl install booted e2e/apps/demo_app.app
+          xcrun simctl get_app_container booted com.example.example app
+
+      - name: Run local recording
+        working-directory: ${{ github.workspace }}
+        timeout-minutes: 20
+        run: maestro --platform ios record --local e2e/demo_app/.maestro/record_local_duration.yaml e2e/demo_app/.maestro/record_local_duration.mp4
+
+      - name: Verify recording duration
+        working-directory: ${{ github.workspace }}/e2e
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          import sys
+
+          path = Path("demo_app/.maestro/record_local_duration.mp4")
+          if not path.exists():
+              print(f"Missing recording: {path}", file=sys.stderr)
+              sys.exit(1)
+
+          data = path.read_bytes()
+
+          def iter_boxes(blob):
+              offset = 0
+              size = len(blob)
+              while offset + 8 <= size:
+                  box_size = struct.unpack(">I", blob[offset:offset + 4])[0]
+                  box_type = blob[offset + 4:offset + 8]
+                  header_size = 8
+                  if box_size == 1:
+                      if offset + 16 > size:
+                          break
+                      box_size = struct.unpack(">Q", blob[offset + 8:offset + 16])[0]
+                      header_size = 16
+                  elif box_size == 0:
+                      box_size = size - offset
+
+                  if box_size < header_size or offset + box_size > size:
+                      break
+
+                  yield box_type, blob[offset + header_size:offset + box_size]
+                  offset += box_size
+
+          moov = next((payload for box_type, payload in iter_boxes(data) if box_type == b"moov"), None)
+          if moov is None:
+              print("Could not find moov atom in recording", file=sys.stderr)
+              sys.exit(1)
+
+          mvhd = next((payload for box_type, payload in iter_boxes(moov) if box_type == b"mvhd"), None)
+          if mvhd is None:
+              print("Could not find mvhd atom in recording", file=sys.stderr)
+              sys.exit(1)
+
+          version = mvhd[0]
+          if version == 0:
+              timescale = struct.unpack(">I", mvhd[12:16])[0]
+              duration = struct.unpack(">I", mvhd[16:20])[0]
+          elif version == 1:
+              timescale = struct.unpack(">I", mvhd[20:24])[0]
+              duration = struct.unpack(">Q", mvhd[24:32])[0]
+          else:
+              print(f"Unsupported mvhd version: {version}", file=sys.stderr)
+              sys.exit(1)
+
+          if timescale <= 0:
+              print(f"Invalid timescale: {timescale}", file=sys.stderr)
+              sys.exit(1)
+
+          duration_seconds = duration / timescale
+          print(f"Recording duration: {duration_seconds:.2f}s")
+
+          if duration_seconds < 120:
+              print("Recording is shorter than 120 seconds", file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - name: Upload recording artifact
+        uses: actions/upload-artifact@v7
+        if: success() || failure()
+        with:
+          name: record-local-duration-mp4
+          path: e2e/demo_app/.maestro/record_local_duration.mp4
+          retention-days: 7
