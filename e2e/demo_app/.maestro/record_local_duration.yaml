@@ -1,9 +1,18 @@
 appId: com.example.example
 name: Record local duration smoke test
+tags:
+  - passing
 ---
 - launchApp:
     clearState: true
 
-# Keep the flow alive for a little over two minutes so local recording stays
-# long enough to validate the recorder output.
-- evalScript: ${Java.type("java.lang.Thread").sleep(125000); true}
+- tapOn: "Animation Test"
+
+# Keep the flow alive for about three minutes using Maestro commands only.
+- repeat:
+    times: 6
+    commands:
+      - tapOn:
+          text: "Animate (30s)"
+          waitToSettleTimeoutMs: 100
+      - waitForAnimationToEnd
