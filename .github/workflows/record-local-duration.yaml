@@ -9,7 +9,7 @@ jobs:
   record-local-duration:
     name: Record local flow
     runs-on: macos-15-intel
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     env:
       MAESTRO_DRIVER_STARTUP_TIMEOUT: 240000
@@ -57,7 +57,7 @@ jobs:
 
       - name: Run local recording
         working-directory: ${{ github.workspace }}
-        timeout-minutes: 20
+        timeout-minutes: 40
         run: maestro --platform ios record --local e2e/demo_app/.maestro/record_local_duration.yaml e2e/demo_app/.maestro/record_local_duration.mp4
 
       - name: Verify recording duration
