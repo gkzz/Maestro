@@ -1,0 +1,28 @@
+appId: com.android.chrome
+name: Chrome Wikipedia fruit loop
+---
+- tapOn:
+    text: "Accept & continue"
+    optional: true
+
+- tapOn:
+    text: "No thanks"
+    optional: true
+
+- evalScript: ${output.deadline = Date.now() + 120000; output.items = [{"query":"apple","title":"Apple"},{"query":"banana","title":"Banana"},{"query":"grape","title":"Grape"},{"query":"orange","title":"Orange"}]; output.i = 0; true}
+
+- repeat:
+    while:
+      true: ${Date.now() < output.deadline}
+    commands:
+      - evalScript: ${output.item = output.items[output.i % output.items.length]; output.i = output.i + 1; true}
+      - openLink:
+          link: https://en.wikipedia.org/w/index.php?search=${output.item.query}
+          browser: true
+      - openLink:
+          link: https://en.wikipedia.org/wiki/${output.item.title}
+          browser: true
+      - extendedWaitUntil:
+          timeout: 10000
+          visible: ${output.item.title}
+      - assertVisible: ${output.item.title}

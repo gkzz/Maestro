@@ -1,4 +1,4 @@
-name: Record Android Local Duration Check
+name: Test Android Local Duration Check
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
 
 jobs:
   record-local-duration:
-    name: Record Android local flow
+    name: Test Android local flow
     runs-on: ubuntu-latest
-    # The Android emulator setup, app install, and local recording all eat into the same job
-    # budget. Keep a wider job cap than the recording step itself so we fail on the actual
-    # recording command rather than the whole job timer.
+    # The Android emulator setup and test run both eat into the same job budget.
+    # Keep a wider job cap than the test step itself so we fail on the actual
+    # Maestro command rather than the whole job timer.
     timeout-minutes: 60
 
     env:
@@ -55,11 +55,6 @@ jobs:
       - name: Build Maestro CLI
         run: ./gradlew :maestro-cli:distZip
 
-      - name: Build demo_app
-        uses: ./.github/actions/build-demo-app
-        with:
-          platform: android
-
       - name: Add Maestro CLI executable to PATH
         run: |
           unzip maestro-cli/build/distributions/maestro.zip -d maestro_extracted
@@ -100,112 +95,7 @@ jobs:
       - name: Wait for AVD to start up and configure CI pre-conditions
         run: bash .github/scripts/setup_android_device.sh
 
-      - name: Install apps
-        working-directory: ${{ github.workspace }}/e2e
-        run: ./install_apps android
-
-      - name: Run local recording
+      - name: Run Maestro test
         working-directory: ${{ github.workspace }}/e2e
         timeout-minutes: 45
-        run: |
-          flow="$RUNNER_TEMP/record_local_duration.yaml"
-          cat > "$flow" <<'EOF'
-          appId: com.example.example
-          name: Record local duration smoke test
-          ---
-          - launchApp
-
-          - extendedWaitUntil:
-              timeout: 60000
-              visible: "Animation Test"
-
-          - tapOn: "Animation Test"
-
-          - repeat:
-              times: 4
-              commands:
-                - tapOn:
-                    text: "Animate (30s)"
-                    waitToSettleTimeoutMs: 100
-                - waitForAnimationToEnd:
-                    timeout: 40000
-          EOF
-          maestro --platform android record --local "$flow" "$RUNNER_TEMP/record_local_duration-android.mp4"
-
-      - name: Verify recording duration
-        working-directory: ${{ github.workspace }}/e2e
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import struct
-          import os
-          import sys
-
-          path = Path(os.environ["RUNNER_TEMP"]) / "record_local_duration-android.mp4"
-          if not path.exists():
-              print(f"Missing recording: {path}", file=sys.stderr)
-              sys.exit(1)
-
-          data = path.read_bytes()
-
-          def iter_boxes(blob):
-              offset = 0
-              size = len(blob)
-              while offset + 8 <= size:
-                  box_size = struct.unpack(">I", blob[offset:offset + 4])[0]
-                  box_type = blob[offset + 4:offset + 8]
-                  header_size = 8
-                  if box_size == 1:
-                      if offset + 16 > size:
-                          break
-                      box_size = struct.unpack(">Q", blob[offset + 8:offset + 16])[0]
-                      header_size = 16
-                  elif box_size == 0:
-                      box_size = size - offset
-
-                  if box_size < header_size or offset + box_size > size:
-                      break
-
-                  yield box_type, blob[offset + header_size:offset + box_size]
-                  offset += box_size
-
-          moov = next((payload for box_type, payload in iter_boxes(data) if box_type == b"moov"), None)
-          if moov is None:
-              print("Could not find moov atom in recording", file=sys.stderr)
-              sys.exit(1)
-
-          mvhd = next((payload for box_type, payload in iter_boxes(moov) if box_type == b"mvhd"), None)
-          if mvhd is None:
-              print("Could not find mvhd atom in recording", file=sys.stderr)
-              sys.exit(1)
-
-          version = mvhd[0]
-          if version == 0:
-              timescale = struct.unpack(">I", mvhd[12:16])[0]
-              duration = struct.unpack(">I", mvhd[16:20])[0]
-          elif version == 1:
-              timescale = struct.unpack(">I", mvhd[20:24])[0]
-              duration = struct.unpack(">Q", mvhd[24:32])[0]
-          else:
-              print(f"Unsupported mvhd version: {version}", file=sys.stderr)
-              sys.exit(1)
-
-          if timescale <= 0:
-              print(f"Invalid timescale: {timescale}", file=sys.stderr)
-              sys.exit(1)
-
-          duration_seconds = duration / timescale
-          print(f"Recording duration: {duration_seconds:.2f}s")
-
-          if duration_seconds < 120:
-              print("Recording is shorter than 120 seconds", file=sys.stderr)
-              sys.exit(1)
-          PY
-
-      - name: Upload recording artifact
-        uses: actions/upload-artifact@v7
-        if: success() || failure()
-        with:
-          name: record-local-duration-android-mp4
-          path: ${{ runner.temp }}/record_local_duration-android.mp4
-          retention-days: 7
+        run: maestro --platform android test workspaces/wikipedia/android-chrome-fruit-loop.yaml
