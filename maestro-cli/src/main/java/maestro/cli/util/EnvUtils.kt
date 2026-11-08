@@ -131,7 +131,8 @@ object EnvUtils {
 
         val versionString = props["version"] as? String ?: return null
 
-        return CliVersion.parse(versionString)
+        // Distribution suffixes identify snapshot/fork builds; feature compatibility uses the core version.
+        return CliVersion.parse(versionString.substringBefore('-').substringBefore('+'))
     }
 }
 
