@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.yield
+import maestro.utils.TempFileHandler
 import maestro.Driver
 import maestro.ElementFilter
 import maestro.Filters
@@ -561,7 +562,7 @@ class Orchestra(
         val timeout = (command.timeoutMs() ?: lookupTimeoutMs)
         val debugMessage = """
             Assertion '${command.condition.description()}' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
-            
+
             Possible causes:
             - Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
             - Element may be temporarily unavailable due to loading state
@@ -715,60 +716,67 @@ class Orchestra(
                     "Create it at one of the searched locations above."
             )
 
-        expectedFile.parentFile?.mkdirs()
+        TempFileHandler().use { scratch ->
+            val bundledActual = artifactsGenerator.allocateScreenshotActual()
+            val actualScreenshotFile = bundledActual ?: scratch.createTempFile("assert-screenshot-", ".png")
 
-        // Temp file is always PNG since maestro.takeScreenshot produces PNG
-        val actualScreenshotFile = File
-            .createTempFile("screenshot-${System.currentTimeMillis()}", ".png")
-            .also { it.deleteOnExit() }
+            val cropOn = command.cropOn
+            if (cropOn != null) {
+                val elementResult = findElement(cropOn, optional = command.optional)
+                val bounds = elementResult.element.bounds
+                if (bounds.width <= 0 || bounds.height <= 0) {
+                    throw MaestroException.AssertionFailure(
+                        message = "Cannot crop screenshot: element '${cropOn.description()}' has invalid dimensions (width: ${bounds.width}, height: ${bounds.height}). The element must have positive width and height to crop the screenshot.",
+                        hierarchyRoot = maestro.viewHierarchy().root,
+                        debugMessage = "The assertScreenshot command with cropOn requires an element with positive dimensions. The found element has bounds: x=${bounds.x}, y=${bounds.y}, width=${bounds.width}, height=${bounds.height}."
+                    )
+                }
+                maestro.takeScreenshot(actualScreenshotFile.sink(), false, bounds)
+            } else {
+                maestro.takeScreenshot(actualScreenshotFile.sink(), false)
+            }
 
-        val cropOn = command.cropOn
-        if (cropOn != null) {
-            val elementResult = findElement(cropOn, optional = command.optional)
-            val bounds = elementResult.element.bounds
-            if (bounds.width <= 0 || bounds.height <= 0) {
-                throw MaestroException.AssertionFailure(
-                    message = "Cannot crop screenshot: element '${cropOn.description()}' has invalid dimensions (width: ${bounds.width}, height: ${bounds.height}). The element must have positive width and height to crop the screenshot.",
+            val actualImage: BufferedImage = ImageIO.read(actualScreenshotFile)
+
+            val expectedImage: BufferedImage = ImageIO.read(expectedFile) ?: throw MaestroException.AssertionFailure(
+                message = "Failed to read image file: ${expectedFile.absolutePath}. Unsupported image format or file could not be read.",
+                hierarchyRoot = maestro.viewHierarchy().root,
+                debugMessage = "The assertScreenshot command requires a valid image file. Supported formats include PNG, JPEG, GIF, BMP, TIFF, and WBMP. The file at ${expectedFile.absolutePath} could not be read."
+            )
+
+            // The reference is workspace input; the diff is run output, so it goes in the bundle,
+            // where the manifest lists it. With no bundle there is nowhere else, so beside the
+            // reference as before.
+            val bundledDiff = artifactsGenerator.allocateScreenshotDiff()
+            val diffFile = bundledDiff ?: expectedFile.resolveSibling("${expectedFile.nameWithoutExtension}_diff.png")
+            val diffLocation = if (bundledDiff != null) {
+                "${BundleLayout.SCREENSHOT_DIFF_DIR}/${diffFile.name} in this run's artifacts (${diffFile.absolutePath})"
+            } else {
+                diffFile.absolutePath
+            }
+
+            val result = ScreenshotMatch.compare(expectedImage, actualImage, thresholdPercentage, diffFile)
+            val matchPercentage = when (result) {
+                is ScreenshotMatch.Result.Match -> result.matchPercent
+                is ScreenshotMatch.Result.Mismatch -> result.matchPercent
+                is ScreenshotMatch.Result.SizeMismatch -> null
+            }
+            artifactsGenerator.recordScreenshotComparison(
+                matchPercentage, thresholdPercentage, bundledActual, result is ScreenshotMatch.Result.SizeMismatch,
+            )
+            when (result) {
+                is ScreenshotMatch.Result.Match -> return false // Screenshots are non-interactive
+                is ScreenshotMatch.Result.SizeMismatch -> throw MaestroException.AssertionFailure(
+                    message = "Screenshot size mismatch: ${command.description()} - expected ${result.expectedWidth}x${result.expectedHeight}, actual ${result.actualWidth}x${result.actualHeight}. Screenshots must have the same dimensions to compare.",
                     hierarchyRoot = maestro.viewHierarchy().root,
-                    debugMessage = "The assertScreenshot command with cropOn requires an element with positive dimensions. The found element has bounds: x=${bounds.x}, y=${bounds.y}, width=${bounds.width}, height=${bounds.height}."
+                    debugMessage = "The assertScreenshot command requires the actual screenshot to have the same dimensions as the reference. Expected: ${result.expectedWidth}x${result.expectedHeight}, got: ${result.actualWidth}x${result.actualHeight}. Use the same device/emulator or cropOn to align dimensions."
+                )
+                is ScreenshotMatch.Result.Mismatch -> throw MaestroException.AssertionFailure(
+                    message = "Comparison error: ${command.description()} - threshold not met, current: ${result.matchPercent}%",
+                    hierarchyRoot = maestro.viewHierarchy().root,
+                    debugMessage = "Screenshot comparison failed. Check the diff image at $diffLocation to see the differences. Adjust the thresholdPercentage if the differences are acceptable."
                 )
             }
-            maestro.takeScreenshot(actualScreenshotFile.sink(), false, bounds)
-        } else {
-            maestro.takeScreenshot(actualScreenshotFile.sink(), false)
-        }
-
-        val actualImage: BufferedImage = ImageIO.read(actualScreenshotFile)
-
-        val expectedImage: BufferedImage = ImageIO.read(expectedFile) ?: throw MaestroException.AssertionFailure(
-            message = "Failed to read image file: ${expectedFile.absolutePath}. Unsupported image format or file could not be read.",
-            hierarchyRoot = maestro.viewHierarchy().root,
-            debugMessage = "The assertScreenshot command requires a valid image file. Supported formats include PNG, JPEG, GIF, BMP, TIFF, and WBMP. The file at ${expectedFile.absolutePath} could not be read."
-        )
-
-        // The reference is workspace input; the diff is run output, so it goes in the bundle,
-        // where the manifest lists it. With no bundle there is nowhere else, so beside the
-        // reference as before.
-        val bundledDiff = artifactsGenerator.allocateScreenshotDiff()
-        val diffFile = bundledDiff ?: expectedFile.resolveSibling("${expectedFile.nameWithoutExtension}_diff.png")
-        val diffLocation = if (bundledDiff != null) {
-            "${BundleLayout.SCREENSHOT_DIFF_DIR}/${diffFile.name} in this run's artifacts (${diffFile.absolutePath})"
-        } else {
-            diffFile.absolutePath
-        }
-
-        when (val result = ScreenshotMatch.compare(expectedImage, actualImage, thresholdPercentage, diffFile)) {
-            is ScreenshotMatch.Result.Match -> return false // Screenshots are non-interactive
-            is ScreenshotMatch.Result.SizeMismatch -> throw MaestroException.AssertionFailure(
-                message = "Screenshot size mismatch: ${command.description()} - expected ${result.expectedWidth}x${result.expectedHeight}, actual ${result.actualWidth}x${result.actualHeight}. Screenshots must have the same dimensions to compare.",
-                hierarchyRoot = maestro.viewHierarchy().root,
-                debugMessage = "The assertScreenshot command requires the actual screenshot to have the same dimensions as the reference. Expected: ${result.expectedWidth}x${result.expectedHeight}, got: ${result.actualWidth}x${result.actualHeight}. Use the same device/emulator or cropOn to align dimensions."
-            )
-            is ScreenshotMatch.Result.Mismatch -> throw MaestroException.AssertionFailure(
-                message = "Comparison error: ${command.description()} - threshold not met, current: ${result.matchPercent}%",
-                hierarchyRoot = maestro.viewHierarchy().root,
-                debugMessage = "Screenshot comparison failed. Check the diff image at $diffLocation to see the differences. Adjust the thresholdPercentage if the differences are acceptable."
-            )
         }
     }
 
@@ -937,8 +945,8 @@ class Orchestra(
                 "Couldn't hide the keyboard. This can happen if the app uses a custom input or doesn't expose a standard dismiss action.",
                 debugMessage = """
                     Instead of hideKeyboard, try tapping on non-interactive element to hide keyboard. Example:
- 
-                    - tapOn: 
+
+                    - tapOn:
                         text: 'Static Text on your screen'
                 """.trimIndent()
             )
@@ -1400,8 +1408,8 @@ class Orchestra(
         // Handle element-relative tap if specified
         val relativePoint = command.relativePoint
         if (relativePoint != null) {
-            val tapPoint = calculateElementRelativePoint(result.element, relativePoint)      
-                  
+            val tapPoint = calculateElementRelativePoint(result.element, relativePoint)
+
             maestro.tap(
                 x = tapPoint.x,
                 y = tapPoint.y,
@@ -1546,7 +1554,7 @@ class Orchestra(
 
         val exceptionDebugMessage = """
             Element with $description not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
-            
+
             Possible causes:
             - Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
             - Element may be temporarily unavailable due to loading state.
@@ -1757,7 +1765,7 @@ class Orchestra(
         } else {
             { nodes -> nodes } // Identity filter if no basic filters
         }
-        
+
         val allFilters = listOf(basicFilter) + relativeFilters
         var resultFilter = Filters.intersect(allFilters)
 

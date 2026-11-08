@@ -2,7 +2,7 @@ package maestro.orchestra
 
 /** Superset across local + cloud; wire form is the enum name (SCREAMING_SNAKE_CASE). */
 enum class ArtifactKind {
-    SCREENSHOT,             // per-step screenshots (all steps when captureFullArtifacts, else failed step only)
+    SCREENSHOT,             // per-step screenshots and exact assertScreenshot comparison images
     TAKE_SCREENSHOT,        // takeScreenshot command output
     SCREENSHOT_DIFF,        // assertScreenshot failure diffs
     SCREEN_RECORDING,       // full-run recording, flag-gated

@@ -9,6 +9,14 @@ import java.util.IdentityHashMap
 /** One artifact a command produced: its kind plus the artifacts-folder-relative path. */
 data class CommandArtifact(val type: ArtifactKind, val path: String)
 
+/** Measured by assertScreenshot itself; null percentage means dimensions did not match. */
+data class ScreenshotComparison(
+    val matchPercentage: Double?,
+    val thresholdPercentage: Double,
+    val actualPath: String?,
+    val sizeMismatch: Boolean = false,
+)
+
 data class CommandDebugMetadata(
     var status: CommandStatus? = null,
     var timestamp: Long? = null,
@@ -18,6 +26,7 @@ data class CommandDebugMetadata(
     /** Nesting level: 0 at the flow top, +1 per runFlow/repeat/retry. The worker's subIndex. */
     var depth: Int = 0,
     var evaluatedCommand: MaestroCommand? = null,
+    var screenshotComparison: ScreenshotComparison? = null,
     val artifacts: MutableList<CommandArtifact> = mutableListOf(),
     /** Back-reference used to attribute collector records; excluded from commands.json (it keys this map). */
     @field:JsonIgnore var command: MaestroCommand? = null,

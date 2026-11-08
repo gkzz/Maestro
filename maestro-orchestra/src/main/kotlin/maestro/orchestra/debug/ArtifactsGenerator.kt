@@ -137,6 +137,25 @@ internal class ArtifactsGenerator(
         )
     }
 
+    /** Keep the exact image used for comparison, including successful assertions. */
+    fun allocateScreenshotActual(): File? {
+        val collector = collector ?: return null
+        val meta = currentCommandMetadata ?: return null
+        return collector.allocate(
+            ArtifactKind.SCREENSHOT,
+            ArtifactFormat.PNG,
+            "${BundleLayout.STEP_SCREENSHOTS_DIR}/${StepArtifactNaming.stem(meta.sequenceNumber, meta.command)}-actual.png",
+            sequenceNumber = meta.sequenceNumber,
+        )
+    }
+
+    fun recordScreenshotComparison(matchPercentage: Double?, thresholdPercentage: Double, actualFile: File?, sizeMismatch: Boolean) {
+        val actualPath = actualFile?.let { artifactsDir?.relativize(it.toPath())?.joinToString("/") }
+        currentCommandMetadata?.screenshotComparison = ScreenshotComparison(
+            matchPercentage, thresholdPercentage, actualPath, sizeMismatch,
+        )
+    }
+
     override fun onCommandFinished(
         cmd: MaestroCommand,
         outcome: CommandOutcome,
